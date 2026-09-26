@@ -1,3 +1,65 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# This fork: local-agent-chat
+
+`aquerman/local-agent-chat` is a personal fork of LibreChat (`upstream` = `LibreChat-AI/LibreChat`,
+`origin` = `aquerman/local-agent-chat`). It is the chat front end for the sister repo `../local-llm`
+(`aquerman/local-llm`), which builds a self-hosted LLM server (llama.cpp `llama-server`, RTX 3060
+12 GB) exposing an OpenAI-compatible API. This repo consumes that server; it does not run models.
+Read `../local-llm/CLAUDE.md` for the server side: engine, validated models, how to start it.
+
+Everything below the "LibreChat" heading is upstream's guidance and still applies to code in this
+repo, except where this section overrides it. Keep fork-specific notes in this section so upstream
+syncs conflict only here.
+
+## How the fork consumes local-llm
+
+- The contract between the two repos is only the OpenAI-compatible HTTP API, by default
+  `http://127.0.0.1:8080/v1` (`LLM_BASE_URL` in `../local-llm/.env.example`, `-Port` in
+  `../local-llm/scripts/start-server.ps1`). No code is shared between the repos.
+- Prefer wiring it as a **custom endpoint** in `librechat.yaml` (`endpoints.custom`, see
+  `librechat.example.yaml`) over code changes. Loopback and private addresses are blocked by
+  LibreChat's SSRF guard unless listed in `endpoints.allowedAddresses` as `host:port`
+  (e.g. `'127.0.0.1:8080'`).
+- `llama-server` ignores the API key, but the custom endpoint still needs a non-empty `apiKey`.
+- Tool calling needs `llama-server --jinja` and a model whose chat template supports tools; check the
+  validated-models table in `../local-llm/CLAUDE.md` before assuming a model can drive agents.
+
+## Local environment (verified 2026-09-26)
+
+- Windows 11 native. **No Docker and no WSL2**, so the `docker-compose*.yml` / `deploy-compose*.yml`
+  paths do not run here, and `host.docker.internal` does not apply: everything talks over `127.0.0.1`.
+- **MongoDB Community Server 8.3** runs as the Windows service `MongoDB` (automatic start) on
+  `127.0.0.1:27017`, matching the default `MONGO_URI`; `mongosh` 2.12 is installed. Unit tests use
+  `mongodb-memory-server` and do not need it.
+- **Node 24.19 LTS is the single system Node** (winget `OpenJS.NodeJS.LTS`), close to the `.nvmrc`
+  pin of 24.16.0. No version manager: fnm and nvm-windows rely on directory junctions under
+  `AppData`, and junctions there cannot be traversed by cmd/PowerShell on this machine (Bitdefender),
+  so they silently fail to switch. Do not reintroduce one without testing that first.
+- Package manager is **npm** (`package-lock.json`, `"packageManager": "npm@11"`), not pnpm: the
+  upstream scripts and Turborepo config assume npm workspaces, and pnpm's symlinked store under
+  `AppData\Local\pnpm` would hit the same junction problem.
+- `.env` and `librechat.yaml` are git-ignored, created from `.env.example` and
+  `librechat.example.yaml`; `node_modules` comes from `npm ci` at the root. `librechat.yaml` wires
+  local-llm as the custom endpoint `local-llm` (model alias `local`, from `--alias local` in
+  `../local-llm/scripts/start-server.ps1`).
+- `gh` default repo is set to `aquerman/local-agent-chat`. Still pass `--repo aquerman/local-agent-chat`
+  to `gh pr create`; never open a pull request against `LibreChat-AI/LibreChat` unless asked.
+
+## Fork workflow (overrides upstream "Branching and Pull Requests")
+
+- `origin` has only `main`. Upstream's `dev`/`canary` rules describe LibreChat's own repo, not this
+  fork: here, branch from `main` and target `main` on `origin`.
+- Upstream sync is by merging `upstream/main` into `main`; do it only when asked.
+- Tasks live on the dotpm board named in `.claude/dotpm.json` ("Local LLM", shared with
+  `../local-llm`). The global `/pickup` skill takes a task from its "Claude" column, works it on a
+  `task/<slug>` branch and moves it to "In Review"; only the owner sets "Done". Because the board is
+  shared, a task may belong to the other repo: check that it concerns this one before claiming it.
+- `/.claude/` is git-ignored upstream; files under it that should be versioned (like `dotpm.json`
+  and `settings.json`) are added with `git add -f` once and tracked from then on.
+
 # LibreChat
 
 ## Project Overview
