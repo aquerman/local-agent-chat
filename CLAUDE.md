@@ -58,6 +58,11 @@ syncs conflict only here.
 - `scripts\start-chat.bat` starts only LibreChat (`npm run backend`, which serves the built client).
   Rebuild the client with `npm run build` after pulling frontend changes; the launcher does not.
 - Open `http://localhost:3080`. The model server's own UI is at `http://127.0.0.1:8080`.
+- Verified 2026-09-27 against Qwen2.5-7B-Instruct Q4_K_M: streaming, stop button, auto-titles,
+  several conversations, history surviving a backend restart, and a clean error when llama-server
+  is down. `.env` keeps upstream's `LIMIT_CONCURRENT_MESSAGES=true` / `CONCURRENT_MESSAGE_MAX=2`,
+  so a third chat streaming at once is refused with "Only 2 messages can run at once"; llama-server
+  serves one request at a time anyway unless started with `--parallel`.
 
 ## Fork workflow (overrides upstream "Branching and Pull Requests")
 
