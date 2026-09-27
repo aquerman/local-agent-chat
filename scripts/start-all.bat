@@ -5,7 +5,7 @@ rem   tab "LibreChat"     the LibreChat backend from this repo, listening on loc
 rem MongoDB runs as a Windows service and needs no tab.
 rem A tab is skipped when its port already has a listener, so re-running never starts a second copy.
 rem Close a tab or press Ctrl+C in it to stop that server.
-rem Copy this file anywhere (e.g. the Desktop); the paths below are absolute on purpose.
+rem The Desktop "Start All" entry is a shortcut to this file; the paths below are absolute on purpose.
 
 setlocal
 set "LLM=C:\Users\aquerman\Documents\GitHub\local-llm"

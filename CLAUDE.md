@@ -52,8 +52,9 @@ syncs conflict only here.
 
 - MongoDB is a Windows service, so only two processes need starting: llama-server (local-llm) and
   the LibreChat backend (this repo). `scripts\start-all.bat` starts both in one Windows Terminal
-  window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. A copy
-  sits on the Desktop as `Start All.bat`; the repo file is the source, update it here and re-copy.
+  window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. The
+  Desktop `Start All`, `Start Chat` and `Start Server` entries are shortcuts (`.lnk`) to the repo
+  files, so editing a script here is enough.
 - `scripts\start-chat.bat` starts only LibreChat (`npm run backend`, which serves the built client).
   Rebuild the client with `npm run build` after pulling frontend changes; the launcher does not.
 - Open `http://localhost:3080`. The model server's own UI is at `http://127.0.0.1:8080`.
