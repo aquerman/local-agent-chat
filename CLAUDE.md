@@ -64,6 +64,23 @@ syncs conflict only here.
   so a third chat streaming at once is refused with "Only 2 messages can run at once"; llama-server
   serves one request at a time anyway unless started with `--parallel`.
 
+## Web search
+
+- `packages/websearch` is a stdio MCP server exposing `search` (DuckDuckGo HTML, no key) and
+  `fetch` (page → readable text, public http(s) hosts only). Design:
+  `docs/superpowers/specs/2026-10-01-websearch-mcp-design.md`.
+- Wired in `librechat.yaml` under `mcpServers.websearch` with `command: node`,
+  `args: ['packages/websearch/dist/index.cjs']`; limits come from the `env` block
+  (`WEBSEARCH_MAX_CHARS`, `WEBSEARCH_TIMEOUT_MS`). `npm run build` builds it with the other
+  workspaces; the backend must be restarted after a rebuild.
+- Enable it per chat from the MCP selector in the input badge row. Debug the server alone with
+  `npx @modelcontextprotocol/inspector node packages/websearch/dist/index.cjs`.
+- Tests: `cd packages/websearch && npx jest`; typecheck with `npx tsc --noEmit` there.
+- Verified 2026-10-01 with Qwen2.5-7B-Instruct Q4_K_M (`--jinja`): asked for today's news, the
+  model called `search` with a sensible query and answered from the results. It did not chain to
+  `fetch` unprompted in that exchange; `fetch` itself is verified over stdio. With a 1 ms timeout
+  both tools return their `isError` text instead of throwing.
+
 ## Fork workflow (overrides upstream "Branching and Pull Requests")
 
 - `origin` has only `main`. Upstream's `dev`/`canary` rules describe LibreChat's own repo, not this
