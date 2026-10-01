@@ -33,6 +33,10 @@ const CELLS = 'td, th';
 const JS_HINT = 'Page content appears to require JavaScript.';
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+function formatBytes(bytes: number): string {
+  return bytes >= 1_000_000 ? `${bytes / 1_000_000} MB` : `${bytes} bytes`;
+}
+
 function failure(reason: string): WebSearchError {
   return new WebSearchError(`Fetch failed: ${reason}`);
 }
@@ -53,7 +57,7 @@ async function readCapped(response: Response, maxBytes: number): Promise<string>
     received += value.byteLength;
     if (received > maxBytes) {
       await reader.cancel();
-      throw failure('response larger than 2 MB');
+      throw failure(`response larger than ${formatBytes(maxBytes)}`);
     }
     chunks.push(decoder.decode(value, { stream: true }));
   }

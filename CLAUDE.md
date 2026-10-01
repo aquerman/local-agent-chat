@@ -71,7 +71,8 @@ syncs conflict only here.
   `docs/superpowers/specs/2026-10-01-websearch-mcp-design.md`.
 - Wired in `librechat.yaml` under `mcpServers.websearch` with `command: node`,
   `args: ['packages/websearch/dist/index.cjs']`; limits come from the `env` block
-  (`WEBSEARCH_MAX_CHARS`, `WEBSEARCH_TIMEOUT_MS`). `npm run build` builds it with the other
+  (`WEBSEARCH_MAX_CHARS`, `WEBSEARCH_TIMEOUT_MS`, `WEBSEARCH_MAX_BYTES` — raw download cap,
+  default 5 MB; the error text reports the configured cap). `npm run build` builds it with the other
   workspaces; the backend must be restarted after a rebuild.
 - Enable it per chat from the MCP selector in the input badge row. Debug the server alone with
   `npx @modelcontextprotocol/inspector node packages/websearch/dist/index.cjs`.

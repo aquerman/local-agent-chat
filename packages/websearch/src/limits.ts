@@ -12,7 +12,7 @@ export const DEFAULT_LIMITS: Limits = {
   maxChars: 8000,
   maxCharsCap: 20000,
   timeoutMs: 10000,
-  maxBytes: 2_000_000,
+  maxBytes: 5_000_000,
   maxResults: 5,
   maxResultsCap: 10,
   minUsefulChars: 200,
@@ -32,9 +32,11 @@ function positiveInt(value: string | undefined): number | undefined {
 export function readLimits(env: NodeJS.ProcessEnv): Limits {
   const maxChars = positiveInt(env.WEBSEARCH_MAX_CHARS);
   const timeoutMs = positiveInt(env.WEBSEARCH_TIMEOUT_MS);
+  const maxBytes = positiveInt(env.WEBSEARCH_MAX_BYTES);
   return {
     ...DEFAULT_LIMITS,
     maxChars: Math.min(maxChars ?? DEFAULT_LIMITS.maxChars, DEFAULT_LIMITS.maxCharsCap),
     timeoutMs: timeoutMs ?? DEFAULT_LIMITS.timeoutMs,
+    maxBytes: maxBytes ?? DEFAULT_LIMITS.maxBytes,
   };
 }

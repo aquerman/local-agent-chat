@@ -7,8 +7,9 @@ async function main(): Promise<void> {
   const server = createServer({ limits });
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  const { maxChars, timeoutMs, maxBytes } = limits;
   process.stderr.write(
-    `websearch: ready (maxChars=${limits.maxChars}, timeoutMs=${limits.timeoutMs})\n`,
+    `websearch: ready (maxChars=${maxChars}, timeoutMs=${timeoutMs}, maxBytes=${maxBytes})\n`,
   );
 }
 

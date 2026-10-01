@@ -17,6 +17,12 @@ describe('readLimits', () => {
     expect(limits.timeoutMs).toBe(DEFAULT_LIMITS.timeoutMs);
   });
 
+  it('defaults the byte cap to 5 MB and applies WEBSEARCH_MAX_BYTES', () => {
+    expect(readLimits({}).maxBytes).toBe(5_000_000);
+    expect(readLimits({ WEBSEARCH_MAX_BYTES: '10000000' }).maxBytes).toBe(10_000_000);
+    expect(readLimits({ WEBSEARCH_MAX_BYTES: 'big' }).maxBytes).toBe(5_000_000);
+  });
+
   it('clamps WEBSEARCH_MAX_CHARS to the hard cap', () => {
     expect(readLimits({ WEBSEARCH_MAX_CHARS: '99999' }).maxChars).toBe(DEFAULT_LIMITS.maxCharsCap);
   });

@@ -129,7 +129,25 @@ describe('fetchPage', () => {
         ...base,
         limits: { ...limits, maxBytes: 1000 },
       }),
-    ).rejects.toThrow('Fetch failed: response larger than 2 MB');
+    ).rejects.toThrow('Fetch failed: response larger than 1000 bytes');
+  });
+
+  it('states the configured cap in megabytes', async () => {
+    const big = `<html><body><main><p>${'y'.repeat(30_000)}</p></main></body></html>`;
+    await expect(
+      fetchPage('https://example.com/', {
+        fetch: fakeFetch(() => html(big)),
+        ...base,
+        limits: { ...limits, maxBytes: 25_000 },
+      }),
+    ).rejects.toThrow('Fetch failed: response larger than 25000 bytes');
+    await expect(
+      fetchPage('https://example.com/', {
+        fetch: fakeFetch(() => html('y'.repeat(5_000_001))),
+        ...base,
+        limits: { ...limits, maxBytes: 5_000_000 },
+      }),
+    ).rejects.toThrow('Fetch failed: response larger than 5 MB');
   });
 
   it('follows redirects but re-checks each hop', async () => {
