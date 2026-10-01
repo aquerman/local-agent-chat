@@ -2,7 +2,8 @@ import * as cheerio from 'cheerio';
 import type { Cheerio, CheerioAPI } from 'cheerio';
 import type { Element } from 'domhandler';
 import type { Limits } from '~/limits';
-import { assertPublicHttpUrl, WebSearchError } from '~/guard';
+import type { Resolver } from '~/guard';
+import { assertPublicHttpUrl, defaultResolver, WebSearchError } from '~/guard';
 
 export type FetchFn = typeof globalThis.fetch;
 
@@ -16,6 +17,7 @@ export interface PageContent {
 
 export interface FetchOptions {
   fetch?: FetchFn;
+  resolve?: Resolver;
   limits: Limits;
   maxChars?: number;
 }
@@ -27,6 +29,7 @@ const TEXT_TYPES = /^(text\/|application\/(xhtml\+xml|xml))/;
 const BOILERPLATE = 'script, style, nav, header, footer, aside, noscript, iframe, svg, template';
 const BLOCKS = 'p, h1, h2, h3, h4, h5, h6, li, tr, pre, blockquote, div, section, article, br';
 const PARAGRAPHS = 'p, h1, h2, h3, h4, h5, h6, pre, blockquote';
+const CELLS = 'td, th';
 const JS_HINT = 'Page content appears to require JavaScript.';
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
@@ -63,8 +66,13 @@ interface Downloaded {
   response: Response;
 }
 
-async function download(rawUrl: string, fetchFn: FetchFn, limits: Limits): Promise<Downloaded> {
-  let url = assertPublicHttpUrl(rawUrl);
+async function download(
+  rawUrl: string,
+  fetchFn: FetchFn,
+  resolve: Resolver,
+  limits: Limits,
+): Promise<Downloaded> {
+  let url = await assertPublicHttpUrl(rawUrl, resolve);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
     const response = await fetchFn(url.href, {
       redirect: 'manual',
@@ -75,7 +83,7 @@ async function download(rawUrl: string, fetchFn: FetchFn, limits: Limits): Promi
     if (!REDIRECT_STATUSES.has(response.status) || location === null) {
       return { url, response };
     }
-    url = assertPublicHttpUrl(new URL(location, url).href);
+    url = await assertPublicHttpUrl(new URL(location, url).href, resolve);
   }
   throw failure('too many redirects');
 }
@@ -111,6 +119,9 @@ function extractText($: CheerioAPI): string {
         node.data = node.data.replace(/\s+/g, ' ');
       }
     });
+  root.find(CELLS).each((_, el) => {
+    $(el).append(' ');
+  });
   root.find(BLOCKS).each((_, el) => {
     $(el).append('\n');
   });
@@ -133,10 +144,11 @@ function wrapError(error: unknown, timeoutMs: number): WebSearchError {
 
 export async function fetchPage(rawUrl: string, options: FetchOptions): Promise<PageContent> {
   const fetchFn = options.fetch ?? globalThis.fetch;
+  const resolve = options.resolve ?? defaultResolver;
   const { limits } = options;
   const maxChars = Math.min(options.maxChars ?? limits.maxChars, limits.maxCharsCap);
   try {
-    const { url, response } = await download(rawUrl, fetchFn, limits);
+    const { url, response } = await download(rawUrl, fetchFn, resolve, limits);
     if (response.status >= 400) {
       throw failure(`HTTP ${response.status}`);
     }

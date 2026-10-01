@@ -74,6 +74,22 @@ describe('search', () => {
     ).rejects.toThrow('Search is temporarily blocked by DuckDuckGo; try again in a minute.');
   });
 
+  it('does not report blocked when results are present alongside the phrase', async () => {
+    const body = fixture('ddg-results.html').replace(
+      'Direct link, no redirect wrapper.',
+      'Unfortunately, bots use DuckDuckGo too.',
+    );
+    const results = await search('q', { fetch: respondWith(body), limits });
+    expect(results).toHaveLength(3);
+  });
+
+  it('reports unknown markup instead of pretending there are no results', async () => {
+    const body = '<html><body><div class="totally-new">hello</div></body></html>';
+    await expect(search('q', { fetch: respondWith(body), limits })).rejects.toThrow(
+      'Search failed: unexpected response from DuckDuckGo. Try again or rephrase.',
+    );
+  });
+
   it('reports HTTP errors', async () => {
     await expect(search('q', { fetch: respondWith('oops', 503), limits })).rejects.toThrow(
       'Search failed: HTTP 503. Try again or rephrase.',

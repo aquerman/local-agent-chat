@@ -5,8 +5,10 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { DEFAULT_LIMITS } from '~/limits';
 import { createServer, formatPage, formatSearch } from '~/server';
 import type { FetchFn } from '~/fetch';
+import type { Resolver } from '~/guard';
 
 const limits = { ...DEFAULT_LIMITS, timeoutMs: 200 };
+const resolve: Resolver = async () => ['93.184.216.34'];
 
 function fixture(name: string): string {
   return fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
@@ -35,7 +37,7 @@ interface TextResult {
 
 async function connect(fetchFn: FetchFn = routed): Promise<Client> {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = createServer({ fetch: fetchFn, limits });
+  const server = createServer({ fetch: fetchFn, limits, resolve });
   await server.connect(serverTransport);
   const client = new Client({ name: 'test', version: '0.0.0' });
   await client.connect(clientTransport);

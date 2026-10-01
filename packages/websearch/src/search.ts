@@ -34,10 +34,14 @@ function resolveLink(href: string): string {
   return wrapped ?? url.href;
 }
 
-function parseResults(body: string, maxResults: number): SearchResult[] {
+function parseResults(body: string, maxResults: number): SearchResult[] | undefined {
   const $ = cheerio.load(body);
+  const hits = $('div.result');
+  if (hits.length === 0) {
+    return $('.no-results').length > 0 ? [] : undefined;
+  }
   const results: SearchResult[] = [];
-  $('div.result').each((_, el) => {
+  hits.each((_, el) => {
     if (results.length >= maxResults) {
       return false;
     }
@@ -85,6 +89,10 @@ export async function search(query: string, options: SearchOptions): Promise<Sea
       headers: { 'user-agent': USER_AGENT, accept: 'text/html' },
     });
     const body = await response.text();
+    const results = parseResults(body, maxResults);
+    if (results !== undefined) {
+      return results;
+    }
     if (isBlocked(body)) {
       process.stderr.write(`websearch: DuckDuckGo bot check (HTTP ${response.status})\n`);
       throw new WebSearchError(BLOCKED);
@@ -92,7 +100,8 @@ export async function search(query: string, options: SearchOptions): Promise<Sea
     if (response.status >= 400) {
       throw failure(`HTTP ${response.status}`);
     }
-    return parseResults(body, maxResults);
+    process.stderr.write(`websearch: unrecognized DuckDuckGo markup (HTTP ${response.status})\n`);
+    throw failure('unexpected response from DuckDuckGo');
   } catch (error) {
     throw wrapError(error, limits.timeoutMs);
   }

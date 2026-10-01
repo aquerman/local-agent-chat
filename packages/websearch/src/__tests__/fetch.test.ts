@@ -1,8 +1,11 @@
 import { DEFAULT_LIMITS } from '~/limits';
 import { fetchPage } from '~/fetch';
 import type { FetchFn } from '~/fetch';
+import type { Resolver } from '~/guard';
 
 const limits = { ...DEFAULT_LIMITS, timeoutMs: 200 };
+const resolve: Resolver = async () => ['93.184.216.34'];
+const base = { limits, resolve };
 
 function html(body: string, init: ResponseInit = {}): Response {
   return new Response(body, {
@@ -29,7 +32,7 @@ describe('fetchPage', () => {
   it('extracts title and readable text from main, dropping boilerplate', async () => {
     const result = await fetchPage('https://example.com/a', {
       fetch: fakeFetch(() => html(page)),
-      limits,
+      ...base,
     });
     expect(result.url).toBe('https://example.com/a');
     expect(result.title).toBe('Hello & welcome');
@@ -44,7 +47,7 @@ describe('fetchPage', () => {
     const body = '<html><body><p>Only body text here, long enough.</p></body></html>';
     const result = await fetchPage('https://example.com/', {
       fetch: fakeFetch(() => html(body)),
-      limits,
+      ...base,
     });
     expect(result.text).toBe('Only body text here, long enough.');
   });
@@ -53,7 +56,7 @@ describe('fetchPage', () => {
     const body = `<html><body><main><p>${'x'.repeat(500)}</p></main></body></html>`;
     const result = await fetchPage('https://example.com/', {
       fetch: fakeFetch(() => html(body)),
-      limits,
+      ...base,
       maxChars: 100,
     });
     expect(result.text).toHaveLength(100);
@@ -64,14 +67,14 @@ describe('fetchPage', () => {
     const body = '<html><body><div id="root"></div><p>Loading…</p></body></html>';
     const result = await fetchPage('https://example.com/', {
       fetch: fakeFetch(() => html(body)),
-      limits,
+      ...base,
     });
     expect(result.hint).toBe('Page content appears to require JavaScript.');
   });
 
   it('passes the URL and an abort signal to fetch, with redirects set to manual', async () => {
     const fetchFn = jest.fn(fakeFetch(() => html(page)));
-    await fetchPage('https://example.com/a', { fetch: fetchFn, limits });
+    await fetchPage('https://example.com/a', { fetch: fetchFn, ...base });
     const [url, init] = fetchFn.mock.calls[0];
     expect(String(url)).toBe('https://example.com/a');
     expect(init?.redirect).toBe('manual');
@@ -80,7 +83,7 @@ describe('fetchPage', () => {
 
   it('refuses private hosts before calling fetch', async () => {
     const fetchFn = jest.fn(fakeFetch(() => html(page)));
-    await expect(fetchPage('http://127.0.0.1:27017/', { fetch: fetchFn, limits })).rejects.toThrow(
+    await expect(fetchPage('http://127.0.0.1:27017/', { fetch: fetchFn, ...base })).rejects.toThrow(
       /Refused to fetch/,
     );
     expect(fetchFn).not.toHaveBeenCalled();
@@ -92,7 +95,7 @@ describe('fetchPage', () => {
       headers: { 'content-type': 'application/pdf' },
     });
     await expect(
-      fetchPage('https://example.com/x.pdf', { fetch: fakeFetch(() => pdf), limits }),
+      fetchPage('https://example.com/x.pdf', { fetch: fakeFetch(() => pdf), ...base }),
     ).rejects.toThrow('Not a text page (application/pdf)');
   });
 
@@ -104,7 +107,7 @@ describe('fetchPage', () => {
     bare.headers.delete('content-type');
     const result = await fetchPage('https://example.com/', {
       fetch: fakeFetch(() => bare),
-      limits,
+      ...base,
     });
     expect(result.text).toBe('No header but still a page of text.');
   });
@@ -113,7 +116,7 @@ describe('fetchPage', () => {
     await expect(
       fetchPage('https://example.com/missing', {
         fetch: fakeFetch(() => html('nope', { status: 404 })),
-        limits,
+        ...base,
       }),
     ).rejects.toThrow('Fetch failed: HTTP 404');
   });
@@ -123,6 +126,7 @@ describe('fetchPage', () => {
     await expect(
       fetchPage('https://example.com/', {
         fetch: fakeFetch(() => html(big)),
+        ...base,
         limits: { ...limits, maxBytes: 1000 },
       }),
     ).rejects.toThrow('Fetch failed: response larger than 2 MB');
@@ -137,7 +141,7 @@ describe('fetchPage', () => {
       ),
     );
     await expect(
-      fetchPage('https://example.com/start', { fetch: fetchFn, limits }),
+      fetchPage('https://example.com/start', { fetch: fetchFn, ...base }),
     ).rejects.toThrow(/Refused to fetch http:\/\/127\.0\.0\.1:27017\//);
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
@@ -148,7 +152,7 @@ describe('fetchPage', () => {
         ? new Response(null, { status: 301, headers: { location: '/new' } })
         : html(page),
     );
-    const result = await fetchPage('https://example.com/old', { fetch: fetchFn, limits });
+    const result = await fetchPage('https://example.com/old', { fetch: fetchFn, ...base });
     expect(result.url).toBe('https://example.com/new');
   });
 
@@ -156,7 +160,7 @@ describe('fetchPage', () => {
     const fetchFn = fakeFetch(
       () => new Response(null, { status: 302, headers: { location: '/again' } }),
     );
-    await expect(fetchPage('https://example.com/', { fetch: fetchFn, limits })).rejects.toThrow(
+    await expect(fetchPage('https://example.com/', { fetch: fetchFn, ...base })).rejects.toThrow(
       'Fetch failed: too many redirects',
     );
   });
@@ -166,15 +170,49 @@ describe('fetchPage', () => {
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
       });
-    await expect(fetchPage('https://example.com/', { fetch: hanging, limits })).rejects.toThrow(
+    await expect(fetchPage('https://example.com/', { fetch: hanging, ...base })).rejects.toThrow(
       'Fetch failed: timed out after 200 ms',
     );
   });
 
   it('wraps network errors', async () => {
     const failing: FetchFn = () => Promise.reject(new TypeError('fetch failed'));
-    await expect(fetchPage('https://example.com/', { fetch: failing, limits })).rejects.toThrow(
+    await expect(fetchPage('https://example.com/', { fetch: failing, ...base })).rejects.toThrow(
       'Fetch failed: fetch failed',
     );
+  });
+
+  it('refuses a redirect to a loopback name', async () => {
+    const fetchFn = jest.fn(
+      fakeFetch((url) =>
+        url === 'https://example.com/start'
+          ? new Response(null, { status: 302, headers: { location: 'http://localhost.:27017/' } })
+          : html(page),
+      ),
+    );
+    await expect(
+      fetchPage('https://example.com/start', { fetch: fetchFn, ...base }),
+    ).rejects.toThrow(/Refused to fetch http:\/\/localhost\.:27017\//);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a public name that resolves to a private address', async () => {
+    const fetchFn = jest.fn(fakeFetch(() => html(page)));
+    const toPrivate: Resolver = async () => ['192.168.1.1'];
+    await expect(
+      fetchPage('https://router.example/', { fetch: fetchFn, limits, resolve: toPrivate }),
+    ).rejects.toThrow(/loopback, link-local and private hosts are blocked/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('separates table cells', async () => {
+    const body =
+      '<html><body><main><table><tr><th>City</th><th>Population</th></tr>' +
+      '<tr><td>Paris</td><td>2,100,000</td></tr></table></main></body></html>';
+    const result = await fetchPage('https://example.com/', {
+      fetch: fakeFetch(() => html(body)),
+      ...base,
+    });
+    expect(result.text).toBe('City Population\nParis 2,100,000');
   });
 });
