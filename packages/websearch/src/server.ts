@@ -5,7 +5,7 @@ import type { PageContent, FetchFn } from '~/fetch';
 import type { SearchResult } from '~/search';
 import type { Limits } from '~/limits';
 import type { Resolver } from '~/guard';
-import { WebSearchError } from '~/guard';
+import { WebSearchError } from '~/errors';
 import { fetchPage } from '~/fetch';
 import { search } from '~/search';
 

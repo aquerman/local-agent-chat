@@ -1,4 +1,5 @@
-import { assertPublicHttpUrl, WebSearchError } from '~/guard';
+import { assertPublicHttpUrl } from '~/guard';
+import { WebSearchError } from '~/errors';
 import type { Resolver } from '~/guard';
 
 const publicResolver: Resolver = async () => ['93.184.216.34'];

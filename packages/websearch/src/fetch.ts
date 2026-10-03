@@ -3,7 +3,8 @@ import type { Cheerio, CheerioAPI } from 'cheerio';
 import type { Element } from 'domhandler';
 import type { Limits } from '~/limits';
 import type { Resolver } from '~/guard';
-import { assertPublicHttpUrl, defaultResolver, WebSearchError } from '~/guard';
+import { assertPublicHttpUrl, defaultResolver } from '~/guard';
+import { WebSearchError } from '~/errors';
 
 export type FetchFn = typeof globalThis.fetch;
 

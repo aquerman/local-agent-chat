@@ -48,18 +48,21 @@ Stdio servers skip LibreChat's MCP SSRF guard entirely (`packages/api/src/auth/d
 
 ### Modules
 
-Four modules, each with one job and a plain-object interface:
+Eight modules, each with one job and a plain-object interface:
 
 | File | Responsibility |
 |---|---|
 | `search.ts` | `search(query, opts) → SearchResult[]`. POSTs to DuckDuckGo HTML, parses with `cheerio`, returns `{ title, url, snippet }`. Decodes DDG's redirect links (`/l/?uddg=…`) to the real URL and drops ad results. |
-| `fetch.ts` | `fetchPage(url, opts) → PageContent`. Downloads with Node's built-in `fetch`, applies the guards below, extracts readable text, returns `{ url, title, text, truncated }`. |
+| `fetch.ts` | `fetchPage(url, opts) → PageContent`. Calls `assertPublicHttpUrl`, downloads with Node's built-in `fetch`, applies the content guards below, extracts readable text, returns `{ url, title, text, truncated }`. |
+| `guard.ts` | `assertPublicHttpUrl(raw, resolve) → URL`. Top-down: parse and check the scheme, refuse `localhost` names, resolve the host (IP literals are not resolved) and refuse if any address is private. Every refusal is a `WebSearchError` prefixed `Refused to fetch <raw>:`. Takes an injected `Resolver` (default: `dns.lookup` with `all: true`). |
+| `addresses.ts` | Pure IP classification: `isPrivateAddress(address)` and `literalAddress(hostname)`. IPv4 ranges are a table; IPv6 is split into loopback, IPv4-mapped, link-local and unique-local checks. No I/O. |
+| `errors.ts` | `WebSearchError`, the one error type the server turns into an `isError` text result. |
 | `server.ts` | Builds the `McpServer` from `@modelcontextprotocol/sdk`, registers the two tools with zod input schemas, formats results as text for the model. |
 | `index.ts` | Connects `server` to `StdioServerTransport`. Nothing else. |
 | `limits.ts` | One constants object for timeouts, byte cap and char caps; env overrides are read here. |
 
-Both network modules take an injected `fetch` function (default: global `fetch`). That is the
-only seam the tests use.
+Both network modules take an injected `fetch` function (default: global `fetch`), and `guard.ts`
+takes an injected `Resolver`. Those are the only seams the tests use.
 
 Dependencies: `@modelcontextprotocol/sdk` and `cheerio` (both already in the monorepo tree), `zod`.
 Build: `tsdown` to `dist/index.cjs`, matching the other packages.
@@ -140,12 +143,14 @@ surface.
 ## Testing
 
 Unit tests with Jest in `packages/websearch` (`cd packages/websearch && npx jest`). The injected
-`fetch` is the only seam; no HTTP mocking library.
+`fetch` and `Resolver` are the only seams; no HTTP or DNS mocking library.
 
 - `search.test.ts`: saved DDG HTML fixtures (normal results, ads-mixed, zero results, bot-check)
   under `__tests__/fixtures/` → assert titles, decoded URLs, ad exclusion, each error string. A
   DDG markup change becomes a fixture refresh.
-- `fetch.test.ts`: URL guards (scheme, loopback, private ranges), content-type rejection, byte-cap
+- `guard.test.ts`: scheme, `localhost` names, every blocked IPv4 and IPv6 range as a literal,
+  public literals that must pass, resolved-name refusals and lookup failures via a fake `Resolver`.
+- `fetch.test.ts`: content-type rejection, byte-cap
   abort, boilerplate stripping, `<main>` preference, truncation marker, JavaScript hint.
 - `server.test.ts`: construct the `McpServer`, connect it to an in-memory client via the SDK's
   `InMemoryTransport`, call `tools/list` and both tools end to end with the fake fetch. Real SDK

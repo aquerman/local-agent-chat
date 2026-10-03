@@ -1,7 +1,7 @@
 import * as cheerio from 'cheerio';
 import type { Limits } from '~/limits';
 import type { FetchFn } from '~/fetch';
-import { WebSearchError } from '~/guard';
+import { WebSearchError } from '~/errors';
 
 export interface SearchResult {
   title: string;
