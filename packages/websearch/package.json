@@ -1,0 +1,41 @@
+{
+  "name": "@librechat/websearch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Keyless web search and page fetch tools for LibreChat, served over stdio MCP",
+  "type": "commonjs",
+  "main": "dist/index.cjs",
+  "bin": {
+    "librechat-websearch": "dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsdown",
+    "build:watch": "tsdown --watch",
+    "test": "jest --watch",
+    "test:ci": "jest --ci",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.cjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "cheerio": "^1.2.0",
+    "domhandler": "^5.0.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.5",
+    "@babel/preset-env": "^7.29.5",
+    "@babel/preset-typescript": "^7.21.0",
+    "@types/jest": "^29.5.2",
+    "@types/node": "^24.12.4",
+    "babel-jest": "^30.2.0",
+    "jest": "^30.2.0",
+    "rimraf": "^6.1.3",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}
