@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "local_agent_chat",
+  "project_id": "02842068-479d-46ba-87a4-2fc0a7cf0048"
+}
