@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useEffect, useCallback, useRef, useId } from 'react';
+import { memo, useMemo, useState, useCallback, useRef, useId } from 'react';
 import copy from 'copy-to-clipboard';
 import { useAtom, useAtomValue } from 'jotai';
 import { Lightbulb, ChevronDown } from 'lucide-react';
@@ -13,6 +13,7 @@ import {
   useInViewport,
 } from './Thinking';
 import { useLocalize, useExpandCollapse, useLazyCollapseBody } from '~/hooks';
+import useThinkingDuration from '~/hooks/Messages/useThinkingDuration';
 import useSmoothStreaming from '~/hooks/Messages/useSmoothStreaming';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { showThinkingAtom } from '~/store/showThinking';
@@ -27,86 +28,6 @@ const stripThinkTags = (reasoning: string): string =>
     .replace(/^<think>\s*/, '')
     .replace(/\s*<\/think>$/, '')
     .trim();
-
-const PEEK_SENTENCES = 4;
-
-/** Tail of streaming reasoning, specifically the last few sentences, for the collapsed
- *  live peek. Bounds work on long reasoning by scanning only the trailing
- *  slice before splitting on sentence boundaries. */
-const lastSentences = (text: string): string => {
-  const tail = text.trim().slice(-1200);
-  if (!tail) {
-    return '';
-  }
-  const sentences = tail.split(/(?<=[.!?])\s+/);
-  return sentences.slice(-PEEK_SENTENCES).join(' ').trim();
-};
-
-/** Symmetric top + bottom edge fade so streaming text dissolves in at the
- *  bottom and out at the top, framed by the same rounded outline the expanded
- *  panel uses.
- *
- *  Custom-CSS exception, narrowly scoped: this is a `mask-image` stencil, not
- *  paint. Only the alpha channel is read, so `#000` means "keep this pixel"
- *  and `transparent` means "hide it". The hue never reaches the screen and no
- *  theme could meaningfully restyle it. Routing it through a theme role would
- *  invite a token with alpha, which would silently wash out the text the mask
- *  is supposed to keep. Tailwind has no mask-image utility that expresses a
- *  four-stop gradient with `calc()` offsets, hence the inline style. */
-const PEEK_FADE =
-  'linear-gradient(to bottom, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent)';
-
-/**
- * Collapsed live preview of streaming reasoning. Mirrors the expanded thought
- * panel. It uses the same rounded outline and text treatment, but with a border instead
- * of a surface fill, showing the trailing few sentences in a short,
- * bottom-pinned window whose top and bottom edges fade out, so the newest
- * thought stays in view while older lines scroll up and dissolve (the "thinking
- * out loud" treatment popularized by Grok). Decorative only (aria-hidden); the
- * toggle button above it provides the accessible control.
- */
-const StreamingThoughtPeek = memo(({ text }: { text: string }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const fontSize = useAtomValue(fontSizeAtom);
-  const peek = useMemo(() => lastSentences(text), [text]);
-
-  /** Pin to the newest content as tokens arrive. `overflow-hidden` elements
-   *  are still scrollable programmatically, so the tail stays in view without
-   *  exposing a scrollbar. */
-  useEffect(() => {
-    const el = ref.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [peek]);
-
-  if (!peek) {
-    return null;
-  }
-
-  return (
-    <div
-      aria-hidden="true"
-      className="mt-1 overflow-hidden rounded-2xl border border-border-light px-4 py-3"
-    >
-      <div
-        ref={ref}
-        className={cn(
-          /** Fixed-height window the text scrolls through. The one-line top pad
-           *  keeps the first streaming line below the top fade (a blank line
-           *  above it) instead of jammed against the faded edge. */
-          'h-[5.5rem] overflow-hidden whitespace-pre-wrap break-words pt-[26px] leading-[26px] text-text-primary',
-          fontSize,
-        )}
-        style={{ maskImage: PEEK_FADE, WebkitMaskImage: PEEK_FADE }}
-      >
-        {peek}
-      </div>
-    </div>
-  );
-});
-
-StreamingThoughtPeek.displayName = 'StreamingThoughtPeek';
 
 type ReasoningProps = {
   partKeyIndex?: number;
@@ -156,13 +77,19 @@ const Reasoning = memo((props: ReasoningProps) => {
   const smoothStreaming = useSmoothStreaming();
   const [expansionOverride, setIsExpanded] = useAtom(useReasoningDisclosure(partKeyIndex));
   const [defaultExpanded] = useState(showThinking);
-  const isExpanded = expansionOverride ?? defaultExpanded;
+  const { messageId, isSubmitting, isLatestMessage, nextType } = useMessageContext();
+  const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
+  /** Reasoning text is never shown live: while a thought streams the row is
+   *  only a "Thinking..." label, which removes the per-token reflow the old
+   *  peek caused. The user's expand choice applies once thinking ends. */
+  const isThinking = Boolean(effectiveIsSubmitting) && isLast;
+  const seconds = useThinkingDuration(`${messageId}:${partKeyIndex}`, isThinking);
+  const isExpanded = !isThinking && (expansionOverride ?? defaultExpanded);
   const [isBarVisible, setIsBarVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { ref: headerRef, inViewport: headerInViewport } = useInViewport();
   const { style: expandStyle, ref: expandRef } = useExpandCollapse(isExpanded);
   const { shouldRenderBody, mountBody, handleTransitionEnd } = useLazyCollapseBody(isExpanded);
-  const { isSubmitting, isLatestMessage, nextType } = useMessageContext();
 
   // Strip <think> tags from the reasoning content (modern format)
   const reasoningText = useMemo(() => stripThinkTags(reasoning), [reasoning]);
@@ -196,17 +123,18 @@ const Reasoning = memo((props: ReasoningProps) => {
     }
   }, []);
 
-  const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
-
   const label = useMemo(() => {
     const generated = reasoningLabel?.trim();
     if (generated) {
       return generated;
     }
-    return effectiveIsSubmitting && isLast
-      ? localize('com_ui_thinking')
+    if (isThinking) {
+      return localize('com_ui_thinking');
+    }
+    return seconds != null
+      ? localize('com_ui_thought_for', { 0: String(seconds) })
       : localize('com_ui_thoughts');
-  }, [effectiveIsSubmitting, isLast, localize, reasoningLabel]);
+  }, [isThinking, localize, reasoningLabel, seconds]);
 
   if (!reasoningText) {
     return null;
@@ -232,11 +160,8 @@ const Reasoning = memo((props: ReasoningProps) => {
             animateLabel={
               smoothStreaming && effectiveIsSubmitting && Boolean(reasoningLabel?.trim())
             }
-            shimmerLabel={effectiveIsSubmitting && isLast}
+            shimmerLabel={isThinking}
           />
-          {!isExpanded && effectiveIsSubmitting && isLast && (
-            <StreamingThoughtPeek text={reasoningText} />
-          )}
         </div>
         <div
           id={contentId}
@@ -252,11 +177,9 @@ const Reasoning = memo((props: ReasoningProps) => {
           >
             {shouldRenderBody && (
               <div className="relative">
-                <ThinkingContent
-                  animate={smoothStreaming && effectiveIsSubmitting && isLast && isExpanded}
-                >
-                  {reasoningText}
-                </ThinkingContent>
+                {/* The body only renders after thinking ends, so the word
+                    fade-in has nothing left to animate. */}
+                <ThinkingContent animate={false}>{reasoningText}</ThinkingContent>
                 <FloatingThinkingBar
                   isVisible={isBarVisible && isExpanded && !headerInViewport}
                   isExpanded={isExpanded}
@@ -284,8 +207,8 @@ type ReasoningCompactProps = {
    *  the feature that renders it. */
   showThinking: boolean;
   isAfterTool?: boolean;
-  /** True while this is the reasoning part currently streaming. Drives the
-   *  collapsed grok-style live peek. */
+  /** True while this is the reasoning part currently streaming. The row then
+   *  shows only its label; the text is held back until thinking ends. */
   isStreaming?: boolean;
 };
 
@@ -310,7 +233,15 @@ export const ReasoningCompact = memo(
     const fontSize = useAtomValue(fontSizeAtom);
     const [expansionOverride, setIsExpanded] = useAtom(useReasoningDisclosure(partKeyIndex));
     const [defaultExpanded] = useState(showThinking);
-    const isExpanded = expansionOverride ?? defaultExpanded;
+    const { messageId } = useMessageContext();
+    /** Same key as the standalone `Reasoning` row, so a thought that moves into
+     *  a tool-call group mid-stream keeps its start time. */
+    const seconds = useThinkingDuration(`${messageId}:${partKeyIndex}`, isStreaming);
+    const isExpanded = !isStreaming && (expansionOverride ?? defaultExpanded);
+    const displayLabel =
+      !isStreaming && seconds != null && label === localize('com_ui_thoughts')
+        ? localize('com_ui_thought_for', { 0: String(seconds) })
+        : label;
     const [isBarVisible, setIsBarVisible] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -319,7 +250,7 @@ export const ReasoningCompact = memo(
     /** Collapsed is the default whenever thoughts are hidden, and a streaming
      *  THINK part re-renders on every delta. Keeping the full text mounted
      *  behind the invisible panel made long reasoning streams progressively
-     *  more expensive on top of the visible peek. */
+     *  more expensive. */
     const { shouldRenderBody, mountBody, handleTransitionEnd } = useLazyCollapseBody(isExpanded);
 
     const reasoningText = useMemo(() => stripThinkTags(reasoning), [reasoning]);
@@ -377,7 +308,7 @@ export const ReasoningCompact = memo(
             <span className={ROW_GLYPH_SLOT} aria-hidden="true">
               <Lightbulb className="size-4 shrink-0 text-text-secondary" />
             </span>
-            <span className="tool-status-text font-medium">{label}</span>
+            <span className="tool-status-text font-medium">{displayLabel}</span>
             <ChevronDown
               className={cn(
                 disclosureChevronVariants({ expanded: isExpanded }),
@@ -401,11 +332,10 @@ export const ReasoningCompact = memo(
             />
           )}
         </div>
-        {!isExpanded && isStreaming && <StreamingThoughtPeek text={reasoningText} />}
         <div
           id={contentId}
           role="group"
-          aria-label={label}
+          aria-label={displayLabel}
           aria-hidden={!isExpanded || undefined}
           style={expandStyle}
           onTransitionEnd={handleTransitionEnd}
