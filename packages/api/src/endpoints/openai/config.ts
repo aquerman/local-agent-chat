@@ -206,6 +206,7 @@ export function getOpenAIConfig(
         customFormat: options.customParams?.reasoningFormat,
         isVercel: Boolean(isVercel),
       }),
+      thinkingBudgets: options.customParams?.thinkingBudgets,
     });
     llmConfig = openaiResult.llmConfig;
     azure = openaiResult.azure;
