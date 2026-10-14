@@ -85,6 +85,16 @@ syncs conflict only here.
   at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
 - PDFs uploaded before this override have no stored text and must be re-uploaded.
 
+## Thinking mode
+
+- The input-bar pill (Off/Low/Medium/High) writes the conversation's `reasoning_effort`. For endpoints with
+  `customParams.reasoningFormat: llama_cpp_budget` the backend sends llama-server's
+  `chat_template_kwargs.enable_thinking` and `thinking_budget_tokens` instead (budgets in
+  `customParams.thinkingBudgets`); Qwen3.5 ignores `reasoning_effort`. Titles always go out with thinking off.
+  See `docs/adr/0001-thinking-mode-translated-in-librechat.md`.
+- Reasoning text never streams on screen: the row shows "Thinking...", then "Thought for Ns" (click to read).
+  Durations are measured in the browser and not stored, so reloaded chats show "Thoughts".
+
 ## Web search
 
 - `packages/websearch` is a stdio MCP server exposing `search` (DuckDuckGo HTML, no key) and
