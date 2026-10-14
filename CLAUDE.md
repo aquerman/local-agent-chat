@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 12 GB) exposing an OpenAI-compatible API. This repo consumes that server; it does not run models.
 Read `../local-llm/CLAUDE.md` for the server side: engine, validated models, how to start it.
 
+Vault note: [[Local LLM]]
+
 Everything below the "LibreChat" heading is upstream's guidance and still applies to code in this
 repo, except where this section overrides it. Keep fork-specific notes in this section so upstream
 syncs conflict only here.
@@ -43,8 +45,10 @@ syncs conflict only here.
   `AppData\Local\pnpm` would hit the same junction problem.
 - `.env` and `librechat.yaml` are git-ignored, created from `.env.example` and
   `librechat.example.yaml`; `node_modules` comes from `npm ci` at the root. `librechat.yaml` wires
-  local-llm as the custom endpoint `local-llm` (model alias `local`, from `--alias local` in
-  `../local-llm/scripts/start-server.ps1`).
+  local-llm as a custom endpoint whose `name` is `Benner` and whose `modelDisplayLabel` is
+  `local-llm` (model alias `local`, from `--alias local` in `../local-llm/scripts/start-server.ps1`).
+  Per-endpoint keys elsewhere in the YAML (`fileConfig.endpoints`) match the `name`, or the
+  generic `custom` key, never the display label.
 - `gh` default repo is set to `aquerman/local-agent-chat`. Still pass `--repo aquerman/local-agent-chat`
   to `gh pr create`; never open a pull request against `LibreChat-AI/LibreChat` unless asked.
 
@@ -63,6 +67,23 @@ syncs conflict only here.
   is down. `.env` keeps upstream's `LIMIT_CONCURRENT_MESSAGES=true` / `CONCURRENT_MESSAGE_MAX=2`,
   so a third chat streaming at once is refused with "Only 2 messages can run at once"; llama-server
   serves one request at a time anyway unless started with `--parallel`.
+
+## Attachments
+
+- Each upload gets an LLM delivery path (`packages/data-provider/src/resolve-llm-delivery-path.ts`):
+  `provider` (bytes encoded into the model request), `text` (parsed on upload, text injected into
+  the prompt as `fileContext`) or `none` (stored for tools only). The system default puts images,
+  audio, video and PDF on `provider` and everything else on `text`. For a custom endpoint the real
+  provider is unknown at upload time, so there is no capability downgrade: a PDF is sent as an
+  OpenAI `file` content part, which llama-server rejects with `400 unsupported content[].type`.
+- `librechat.yaml` therefore sets `fileConfig.endpoints.custom.defaultLLMDeliveryPath.overrides`
+  with `application/pdf: text`. Keep it an override, not a `fallback`, or images leave the provider
+  path too. Images still go to the model natively (useful only with a vision model).
+- Text extraction is the built-in parser in `packages/api/src/files/documents/crud.ts` (PDF.js for
+  PDF, mammoth for docx, xlsx for sheets), 15 MB cap, text layer only: scanned PDFs fail with
+  "requires an OCR service" because no `ocr` or `RAG_API_URL` is configured. Injected text is cut
+  at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
+- PDFs uploaded before this override have no stored text and must be re-uploaded.
 
 ## Web search
 
