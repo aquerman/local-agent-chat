@@ -53,6 +53,7 @@ import AttachFileChat from './Files/AttachFileChat';
 import CodeWorkspaceMenu from './CodeWorkspaceMenu';
 import useSteering from '~/hooks/Chat/useSteering';
 import CodeApprovalMenu from './CodeApprovalMenu';
+import ThinkingModeMenu from './ThinkingModeMenu';
 import FileFormChat from './Files/FileFormChat';
 import InFlightSteers from './InFlightSteers';
 import TextareaHeader from './TextareaHeader';
@@ -865,6 +866,11 @@ const ChatForm = memo(function ChatForm({
                   isInChat={
                     Array.isArray(conversation?.messages) && conversation.messages.length >= 1
                   }
+                />
+                <ThinkingModeMenu
+                  conversation={conversation}
+                  setConversation={setConversation}
+                  disabled={disableInputs}
                 />
                 <CodeApprovalMenu
                   conversation={conversation}
