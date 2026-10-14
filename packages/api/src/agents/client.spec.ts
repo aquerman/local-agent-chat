@@ -13,6 +13,7 @@ import {
   prependQuotes,
   prependFileContext,
   applyAttachmentOnlyText,
+  disableThinkingForTitle,
 } from './client';
 import { ATTACHMENT_ONLY_TEXT } from '~/files/context';
 import Tokenizer from '~/utils/tokenizer';
@@ -484,5 +485,29 @@ describe('applyAttachmentOnlyText', () => {
     applyAttachmentOnlyText(message, withFiles);
 
     expect(message.content).toBe('');
+  });
+});
+
+describe('disableThinkingForTitle', () => {
+  it('turns a llama.cpp thinking budget into thinking off', () => {
+    const result = disableThinkingForTitle({
+      model: 'local',
+      modelKwargs: {
+        chat_template_kwargs: { enable_thinking: true, foo: 'bar' },
+        thinking_budget_tokens: 6144,
+        top_k: 20,
+      },
+    });
+    expect(result.modelKwargs).toEqual({
+      chat_template_kwargs: { enable_thinking: false, foo: 'bar' },
+      top_k: 20,
+    });
+  });
+
+  it('leaves options without a thinking budget untouched', () => {
+    const options = { model: 'gpt-x', modelKwargs: { verbosity: 'low' } };
+    expect(disableThinkingForTitle(options)).toBe(options);
+    const bare = { model: 'gpt-x' };
+    expect(disableThinkingForTitle(bare)).toBe(bare);
   });
 });

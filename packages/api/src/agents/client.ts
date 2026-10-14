@@ -32,6 +32,36 @@ export const omitTitleOptions: Set<string> = new Set([
   'additionalModelRequestFields',
 ]);
 
+/**
+ * Title requests never think. With `reasoningFormat: 'llama_cpp_budget'` the
+ * conversation's budget rides along in `modelKwargs`; left on, a reasoning model
+ * can spend the title's whole allowance thinking and return no title. A
+ * `thinking_budget_tokens` key is the marker that this format is active.
+ *
+ * The generic `T` accepts any options object that may carry `modelKwargs` and
+ * returns that same type, so callers keep their own option type. The index
+ * signature in the constraint matters: without it every property would be
+ * optional, and TypeScript rejects an argument such as `{ model }` that shares
+ * none of them ("weak type" check).
+ */
+export function disableThinkingForTitle<
+  T extends { modelKwargs?: Record<string, unknown>; [key: string]: unknown },
+>(options: T): T {
+  const kwargs = options.modelKwargs;
+  if (kwargs?.thinking_budget_tokens == null) {
+    return options;
+  }
+  const { thinking_budget_tokens: _budget, chat_template_kwargs, ...rest } = kwargs;
+  const templateKwargs =
+    chat_template_kwargs != null && typeof chat_template_kwargs === 'object'
+      ? (chat_template_kwargs as Record<string, unknown>)
+      : {};
+  return {
+    ...options,
+    modelKwargs: { ...rest, chat_template_kwargs: { ...templateKwargs, enable_thinking: false } },
+  };
+}
+
 export function payloadParser({
   req,
   endpoint,
