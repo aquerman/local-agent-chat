@@ -986,6 +986,7 @@ function ChatFormWrapper({
       conversation?.model,
       conversation?.maxContextTokens,
       conversation?.codeApprovalMode,
+      conversation?.reasoning_effort,
       conversation?.codeEnvironmentMode,
       conversation?.codeWorkspaces,
       hasMessages,

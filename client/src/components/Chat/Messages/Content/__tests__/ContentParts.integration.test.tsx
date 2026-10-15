@@ -1244,7 +1244,9 @@ describe('ContentParts — live activity fold', () => {
     expect(liveHeader()).toHaveTextContent('Confirmed the missing lens');
   });
 
-  it('previews reasoning between calls one sentence at a time, in the same single row', () => {
+  it('names reasoning between calls as Thinking, in the same single row', () => {
+    /** Thinking mode: reasoning text is never shown live, so the row reads
+     *  "Thinking..." however the thought grows, instead of its sentences. */
     jest.useFakeTimers();
     const frame = (think: string) => (
       <RecoilRoot>
@@ -1258,17 +1260,16 @@ describe('ContentParts — live activity fold', () => {
       </RecoilRoot>
     );
     const { rerender } = render(frame('Both refs share a commit.'));
-    expect(liveHeader()).toHaveTextContent('Both refs share a commit.');
+    expect(liveHeader()).toHaveTextContent('com_ui_thinking');
+    expect(liveHeader()).not.toHaveTextContent('Both refs');
     expect(screen.queryByTestId('reasoning')).toBeNull();
 
     rerender(frame('Both refs share a commit. That leaves the ordering'));
     act(() => {
       jest.advanceTimersByTime(500);
     });
-    expect(liveHeader()).toHaveTextContent('That leaves the ordering');
-    /** The previous sentence is the `aria-hidden` line sliding out, which is
-     *  the tick itself; the row's current line is the new sentence alone. */
-    expect(within(liveHeader()).getByTitle('That leaves the ordering')).toBeInTheDocument();
+    expect(liveHeader()).toHaveTextContent('com_ui_thinking');
+    expect(liveHeader()).not.toHaveTextContent('ordering');
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
@@ -1299,7 +1300,7 @@ describe('ContentParts — live activity fold', () => {
     } as unknown as TMessageContentParts;
     const { rerender } = renderContentParts({ ...liveProps, content: [thought] });
     expect(screen.getAllByRole('button')).toHaveLength(1);
-    expect(liveHeader()).toHaveTextContent('Planning the lookup.');
+    expect(liveHeader()).toHaveTextContent('com_ui_thinking');
     expect(screen.queryByTestId('reasoning')).toBeNull();
     expect(screen.getByTestId('live-phase-thinking')).toBeInTheDocument();
 

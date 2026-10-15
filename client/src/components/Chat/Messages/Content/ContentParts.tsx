@@ -30,6 +30,7 @@ import {
   lastCursorContentIdx,
   getActivityLabelText,
 } from '~/utils/activityLabels';
+import { ThinkingTurnContext, useTrackThinking } from '~/hooks/Messages/useThinkingDuration';
 import WorkspaceChanges, { partitionWorkspaceChanges } from './Parts/WorkspaceChanges';
 import { ParallelContentRenderer, type PartWithIndex } from './ParallelContent';
 import { MediaContext, MessageContext, SearchContext } from '~/Providers';
@@ -1190,6 +1191,26 @@ const ContentPartsBody = memo(function ContentPartsBody({
   return <ApprovalProvider>{sequentialContent}</ApprovalProvider>;
 });
 
+/** Key of the thought streaming at the end of this response, or `null` when
+ *  none is: the response is not streaming, or something already follows its
+ *  last thought. Scans back only past empty slots, so usually one step. */
+function getStreamingThoughtKey(
+  turn: string,
+  { content, isSubmitting, isLatestMessage, isLast }: ContentPartsProps,
+): string | null {
+  if (!isSubmitting || isLatestMessage !== true || !isLast || content == null) {
+    return null;
+  }
+  for (let idx = content.length - 1; idx >= 0; idx -= 1) {
+    const part = content[idx];
+    if (part == null) {
+      continue;
+    }
+    return part.type === ContentTypes.THINK ? `${turn}:${getPartKeyIndex(part, idx)}` : null;
+  }
+  return null;
+}
+
 const ContentParts = memo(function ContentParts(props: ContentPartsProps) {
   const { attachments, messageId, conversationId } = props;
   const toolState = useRef<{
@@ -1222,6 +1243,16 @@ const ContentParts = memo(function ContentParts(props: ContentPartsProps) {
     reasoningState.current = { messageId, disclosures: new Map() };
   }
   const reasoningDisclosures = reasoningState.current.disclosures;
+  /** The thinking timer's turn identity: the first id this response had,
+   *  kept through finalization like the tool disclosures above. */
+  const turnState = useRef<{ messageId: string; turn: string } | null>(null);
+  if (turnState.current == null || (turnState.current.messageId !== messageId && !finalizing)) {
+    turnState.current = { messageId, turn: messageId };
+  } else {
+    turnState.current.messageId = messageId;
+  }
+  const thinkingTurn = turnState.current.turn;
+  useTrackThinking(getStreamingThoughtKey(thinkingTurn, props));
   /** Published once for the whole message so every markdown block below —
    *  including the ones nested inside phase cards — resolves a bare
    *  `![DTI](5_dti.png)` against the files this turn actually produced.
@@ -1241,7 +1272,9 @@ const ContentParts = memo(function ContentParts(props: ContentPartsProps) {
     <MediaContext.Provider value={media}>
       <ReasoningDisclosureContext.Provider value={reasoningDisclosures}>
         <ToolDisclosureContext.Provider value={toolDisclosures}>
-          <ContentPartsBody {...props} />
+          <ThinkingTurnContext.Provider value={thinkingTurn}>
+            <ContentPartsBody {...props} />
+          </ThinkingTurnContext.Provider>
         </ToolDisclosureContext.Provider>
       </ReasoningDisclosureContext.Provider>
     </MediaContext.Provider>

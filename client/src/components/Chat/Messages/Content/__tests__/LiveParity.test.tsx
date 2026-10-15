@@ -527,27 +527,32 @@ describe('live fold parity with the cards it hides', () => {
     expect(screen.getByTestId('activity-phase-announcer')).toHaveTextContent('First pass');
   });
 
-  it('previews CJK reasoning sentence by sentence', () => {
+  it('shows the Thinking label, never the reasoning text, while a thought streams', () => {
+    /** Thinking mode (docs/adr/0001): reasoning text is never shown live, in
+     *  the phase header any more than in the reasoning row itself. */
     const think = {
       type: ContentTypes.THINK,
-      think: '两个引用共享一个提交。接下来检查顺序约定',
+      think: 'Two refs share a commit. Next, check the ordering convention',
     } as unknown as TMessageContentParts;
     mount([toPart({ name: 'lookup', output: 'rows' }), think], undefined, true);
     const button = within(screen.getByTestId('activity-phase-card')).getAllByRole('button')[0];
 
-    expect(button).toHaveTextContent('接下来检查顺序约定');
-    expect(button).not.toHaveTextContent('两个引用');
+    expect(button).toHaveTextContent('Thinking...');
+    expect(button).not.toHaveTextContent('ordering convention');
+    expect(button).not.toHaveTextContent('Two refs');
   });
 
-  it('keeps a CJK sentence that ends exactly at the tail instead of reverting to the call', () => {
+  it('prefers the generated reasoning label over the Thinking fallback', () => {
     const think = {
       type: ContentTypes.THINK,
-      think: '两个引用共享一个提交。接下来检查顺序约定。',
+      think: 'Two refs share a commit.',
+      reasoning_label: 'Comparing refs',
     } as unknown as TMessageContentParts;
     mount([toPart({ name: 'lookup', output: 'rows' }), think], undefined, true);
     const button = within(screen.getByTestId('activity-phase-card')).getAllByRole('button')[0];
 
-    expect(button).toHaveTextContent('接下来检查顺序约定。');
+    expect(button).toHaveTextContent('Comparing refs');
+    expect(button).not.toHaveTextContent('Two refs');
   });
 
   it.each([
@@ -909,79 +914,21 @@ describe('live activity hardening transitions', () => {
     </QueryClientProvider>
   );
 
-  it.each([160, 640])('streams each short sentence freely until it fills a %ipx row', (width) => {
+  it('keeps a growing thought on one Thinking label without announcing it', () => {
+    /** Thinking mode: the header never previews reasoning sentences, so a
+     *  streaming thought holds a single steady line however it grows. */
     jest.useFakeTimers();
-    jest.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
-    jest.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      return (this.textContent?.length ?? 0) * 8;
-    });
     const content = (think: string): TMessageContentParts[] => [
       { type: ContentTypes.THINK, think },
     ];
     const view = render(frame(content('Let me')));
     const header = screen.getByRole('button');
-    view.rerender(frame(content('Let me check')));
-    expect(header).toHaveAccessibleName('Let me check');
-
-    const full = 'Checking the available evidence '.repeat(Math.ceil(width / 240)).trim();
-    view.rerender(frame(content(full)));
-    expect(header).toHaveAccessibleName(full);
-    view.rerender(frame(content(full + ' carefully')));
-    expect(header).toHaveAccessibleName(full);
-    act(() => jest.advanceTimersByTime(500));
-    expect(header).toHaveAccessibleName(full + ' carefully');
-
-    view.rerender(frame(content(full + ' carefully. Now I')));
-    act(() => jest.advanceTimersByTime(500));
-    expect(header).toHaveAccessibleName('Now I');
-    view.rerender(frame(content(full + ' carefully. Now I can check')));
-    expect(header).toHaveAccessibleName('Now I can check');
+    for (const think of ['Let me check', 'Let me check carefully. Now I', 'Now I can check']) {
+      view.rerender(frame(content(think)));
+      act(() => jest.advanceTimersByTime(500));
+      expect(header).toHaveAccessibleName('Thinking...');
+    }
     expect(screen.getByTestId('activity-phase-announcer')).toBeEmptyDOMElement();
-    jest.restoreAllMocks();
-  });
-
-  it('releases a queued reasoning preview when resizing gives the line more room', () => {
-    jest.useFakeTimers();
-    let width = 160;
-    const callbacks = new Set<ResizeObserverCallback>();
-    const disconnect = jest.fn();
-    jest.spyOn(global, 'ResizeObserver').mockImplementation((callback) => {
-      callbacks.add(callback);
-      return {
-        observe: jest.fn(),
-        unobserve: jest.fn(),
-        disconnect: () => {
-          callbacks.delete(callback);
-          disconnect();
-        },
-      };
-    });
-    jest.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width);
-    jest.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      return (this.textContent?.length ?? 0) * 8;
-    });
-    const content = (think: string): TMessageContentParts[] => [
-      { type: ContentTypes.THINK, think },
-    ];
-    const initial = 'Checking the available evidence';
-    const view = render(frame(content(initial)));
-    view.rerender(frame(content(initial + ' carefully')));
-    expect(screen.getByRole('button')).toHaveAccessibleName(initial);
-
-    width = 640;
-    act(() => {
-      for (const callback of callbacks) {
-        callback([], { observe: () => {}, unobserve: () => {}, disconnect: () => {} });
-      }
-    });
-    expect(screen.getByRole('button')).toHaveAccessibleName(initial + ' carefully');
-    view.unmount();
-    expect(disconnect).toHaveBeenCalled();
-    jest.restoreAllMocks();
   });
 
   function SandboxEvent() {
@@ -1172,7 +1119,7 @@ describe('live activity hardening transitions', () => {
   });
 
   it.each(['x'.repeat(1199), 'Earlier sentence. ' + 'x'.repeat(1199)])(
-    'does not repeatedly announce one thought as its bounded preview window moves',
+    'does not repeatedly announce one long thought as it grows',
     (initial) => {
       jest.useFakeTimers();
       const content = (think: string) => [
@@ -1187,7 +1134,7 @@ describe('live activity hardening transitions', () => {
         });
       }
       expect(screen.getByTestId('activity-phase-announcer')).toBeEmptyDOMElement();
-      expect(screen.getByRole('button')).toHaveAccessibleName('Next sentence');
+      expect(screen.getByRole('button')).toHaveAccessibleName('Thinking...');
     },
   );
 
@@ -1347,12 +1294,42 @@ describe('live disclosure ownership', () => {
           ? [thought, { type: ContentTypes.TEXT, text: 'Here is the answer.' }]
           : [thought];
       view.rerender(frame(content, 'm1', transition === 'answer'));
-      expect(screen.getByRole('button', { name: /^Thoughts$/i })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: /^Thought for \d+s$/i })).toHaveAttribute(
         'aria-expanded',
         'true',
       );
     },
   );
+
+  it('reads Thought for Ns once a streamed thought finalizes under the server id', () => {
+    /** While the model thinks, the live fold renders the thought, not the
+     *  reasoning row, and the response carries its optimistic `_` id. The
+     *  duration must survive both swaps to reach the settled row. */
+    const view = render(frame([thought], 'turn-duration_'));
+    expect(screen.queryByRole('button', { name: /^Thought for/i })).toBeNull();
+
+    view.rerender(
+      frame(
+        [thought, { type: ContentTypes.TEXT, text: 'Here is the answer.' }],
+        'server-duration',
+        false,
+      ),
+    );
+
+    expect(screen.getByRole('button', { name: /^Thought for \d+s$/i })).toBeInTheDocument();
+  });
+
+  it('falls back to Thoughts for a finished thought this page never saw stream', () => {
+    render(
+      frame(
+        [thought, { type: ContentTypes.TEXT, text: 'Here is the answer.' }],
+        'reloaded-turn',
+        false,
+      ),
+    );
+
+    expect(screen.getByRole('button', { name: /^Thoughts$/i })).toBeInTheDocument();
+  });
 
   it('preserves an explicitly closed thought when the answer starts', () => {
     const view = render(frame([thought]));
@@ -1363,7 +1340,7 @@ describe('live disclosure ownership', () => {
     expect(reasoningHeader).not.toBeNull();
     fireEvent.click(reasoningHeader!);
     view.rerender(frame([thought, { type: ContentTypes.TEXT, text: 'Here is the answer.' }]));
-    expect(screen.getByRole('button', { name: /^Thoughts$/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /^Thought for \d+s$/i })).toHaveAttribute(
       'aria-expanded',
       'false',
     );

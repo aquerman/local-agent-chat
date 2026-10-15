@@ -12,8 +12,8 @@ import {
   FloatingThinkingBar,
   useInViewport,
 } from './Thinking';
+import useThinkingDuration, { useThinkingKey } from '~/hooks/Messages/useThinkingDuration';
 import { useLocalize, useExpandCollapse, useLazyCollapseBody } from '~/hooks';
-import useThinkingDuration from '~/hooks/Messages/useThinkingDuration';
 import useSmoothStreaming from '~/hooks/Messages/useSmoothStreaming';
 import CopyButton from '~/components/Messages/Content/CopyButton';
 import { showThinkingAtom } from '~/store/showThinking';
@@ -77,13 +77,13 @@ const Reasoning = memo((props: ReasoningProps) => {
   const smoothStreaming = useSmoothStreaming();
   const [expansionOverride, setIsExpanded] = useAtom(useReasoningDisclosure(partKeyIndex));
   const [defaultExpanded] = useState(showThinking);
-  const { messageId, isSubmitting, isLatestMessage, nextType } = useMessageContext();
+  const { isSubmitting, isLatestMessage, nextType } = useMessageContext();
   const effectiveIsSubmitting = isLatestMessage ? isSubmitting : false;
   /** Reasoning text is never shown live: while a thought streams the row is
    *  only a "Thinking..." label, which removes the per-token reflow the old
    *  peek caused. The user's expand choice applies once thinking ends. */
   const isThinking = Boolean(effectiveIsSubmitting) && isLast;
-  const seconds = useThinkingDuration(`${messageId}:${partKeyIndex}`, isThinking);
+  const seconds = useThinkingDuration(useThinkingKey(partKeyIndex), isThinking);
   const isExpanded = !isThinking && (expansionOverride ?? defaultExpanded);
   const [isBarVisible, setIsBarVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -233,10 +233,9 @@ export const ReasoningCompact = memo(
     const fontSize = useAtomValue(fontSizeAtom);
     const [expansionOverride, setIsExpanded] = useAtom(useReasoningDisclosure(partKeyIndex));
     const [defaultExpanded] = useState(showThinking);
-    const { messageId } = useMessageContext();
     /** Same key as the standalone `Reasoning` row, so a thought that moves into
      *  a tool-call group mid-stream keeps its start time. */
-    const seconds = useThinkingDuration(`${messageId}:${partKeyIndex}`, isStreaming);
+    const seconds = useThinkingDuration(useThinkingKey(partKeyIndex), isStreaming);
     const isExpanded = !isStreaming && (expansionOverride ?? defaultExpanded);
     const displayLabel =
       !isStreaming && seconds != null && label === localize('com_ui_thoughts')
