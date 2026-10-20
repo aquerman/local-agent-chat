@@ -84,6 +84,10 @@ syncs conflict only here.
   "requires an OCR service" because no `ocr` or `RAG_API_URL` is configured. Injected text is cut
   at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
 - PDFs uploaded before this override have no stored text and must be re-uploaded.
+- Clicking a PDF or image chip in a sent message opens the original file in the right-hand side panel
+  (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces the other.
+  For files the model read as text, a header button shows the extracted text. Other types and shared
+  links keep the upstream text dialog.
 
 ## Thinking mode
 
