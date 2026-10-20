@@ -19,6 +19,7 @@ import {
   isThinkingMode,
   useThinkingModePreference,
 } from '~/hooks/Input/thinkingModePreference';
+import useAgentUploadTarget from '~/hooks/Agents/useAgentUploadTarget';
 import { useGetEndpointsQuery } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -71,8 +72,8 @@ function toMode(effort: unknown): ThinkingMode | undefined {
  * Input-bar pill for how much a local reasoning model may think (Off / Low /
  * Medium / High). It writes the conversation's `reasoning_effort`, which the
  * backend translates into llama-server's thinking budget for endpoints with
- * `customParams.reasoningFormat: llama_cpp_budget` (docs/adr/0001). Hidden for
- * every other endpoint.
+ * `customParams.reasoningFormat: llama_cpp_budget` (docs/adr/0001), including a
+ * saved agent whose provider is such an endpoint. Hidden for every other endpoint.
  */
 export default function ThinkingModeMenu({
   conversation,
@@ -90,7 +91,9 @@ export default function ThinkingModeMenu({
   const menuStore = Ariakit.useMenuStore({ focusLoop: true, placement: 'top-start' });
   const isOpen = menuStore.useState('open');
 
-  const endpoint = conversation?.endpoint ?? '';
+  /** An agents conversation thinks on its agent's provider, so the pill follows that endpoint. */
+  const { agentProvider } = useAgentUploadTarget(conversation);
+  const endpoint = agentProvider ?? conversation?.endpoint ?? '';
   const available =
     endpointsConfig?.[endpoint]?.customParams?.reasoningFormat ===
     ReasoningParameterFormat.llamaCppBudget;

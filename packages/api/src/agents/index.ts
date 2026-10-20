@@ -28,6 +28,7 @@ export * from './backgroundCompletion';
 export * from './backgroundClaims';
 export * from './backgroundCompletionWakeup';
 export * from './initialize';
+export * from './thinking';
 export * from './legacy';
 export * from './listing';
 export * from './listingAvatars';

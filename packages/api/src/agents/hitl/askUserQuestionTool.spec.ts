@@ -1,4 +1,6 @@
+import { toJsonSchema } from '@langchain/core/utils/json_schema';
 import {
+  LLAMA_CPP_GRAMMAR_SAFE_MAX,
   ASK_USER_QUESTION_TOOL_NAME,
   AskUserQuestionToolDefinition,
   askUserQuestionToolSchema,
@@ -7,7 +9,43 @@ import {
 
 const question = (id = 'environment') => ({ id, question: 'Deploy where?' });
 
+/** Every numeric bound llama.cpp turns into a grammar repetition, wherever it sits in the schema. */
+function collectRepetitionBounds(node: unknown, found: number[] = []): number[] {
+  if (Array.isArray(node)) {
+    node.forEach((child) => collectRepetitionBounds(child, found));
+    return found;
+  }
+  if (node == null || typeof node !== 'object') {
+    return found;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if ((key === 'maxLength' || key === 'maxItems') && typeof value === 'number') {
+      found.push(value);
+    }
+    collectRepetitionBounds(value, found);
+  }
+  return found;
+}
+
 describe('ask_user_question tool contract', () => {
+  test('stays compilable by llama-server: no grammar repetition bound reaches 2000', () => {
+    const modelFacing = [
+      AskUserQuestionToolDefinition.schema,
+      toJsonSchema(askUserQuestionToolSchema),
+      toJsonSchema(createAskUserQuestionTool().schema as typeof askUserQuestionToolSchema),
+    ];
+    for (const schema of modelFacing) {
+      const bounds = collectRepetitionBounds(schema);
+      expect(bounds.length).toBeGreaterThan(0);
+      expect(Math.max(...bounds)).toBeLessThanOrEqual(LLAMA_CPP_GRAMMAR_SAFE_MAX);
+    }
+  });
+
+  test('rejects questions longer than the grammar-safe cap', () => {
+    const tooLong = { id: 'q', question: 'x'.repeat(LLAMA_CPP_GRAMMAR_SAFE_MAX + 1) };
+    expect(askUserQuestionToolSchema.safeParse({ questions: [tooLong] }).success).toBe(false);
+  });
+
   test('the name matches the SDK interrupt discriminator the pipeline keys on', () => {
     expect(ASK_USER_QUESTION_TOOL_NAME).toBe('ask_user_question');
     expect(AskUserQuestionToolDefinition.name).toBe(ASK_USER_QUESTION_TOOL_NAME);

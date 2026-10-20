@@ -118,6 +118,7 @@ import { resolveToolRoleGrants } from '~/tools/rolePermissions';
 import { createRequestAgentExecutionContext } from './runtime';
 import { resolveTurnDeliveryRouting } from './files/delivery';
 import { filterFilesByEndpointRuntimeConfig } from '~/files';
+import { selectRequestModelParameters } from './thinking';
 import { hasActiveFileFieldPolicy } from '~/protection';
 import { PARTIAL_RESOLVED_CONVERSATION } from './guard';
 import { applyBackgroundToolCalls } from './background';
@@ -1277,18 +1278,6 @@ export async function initializeAgent(
 
   let currentFiles: Array<IMongoFile | TFile> | undefined;
 
-  const _modelOptions = structuredClone(
-    Object.assign(
-      { model: agent.model },
-      agent.model_parameters ?? { model: agent.model },
-      isInitialAgent === true ? endpointOption?.model_parameters : {},
-    ),
-  );
-
-  const { resendFiles, maxContextTokens, imageDetail, modelOptions } = extractLibreChatParams(
-    _modelOptions as Record<string, unknown>,
-  );
-
   const provider = agent.provider;
   agent.endpoint = provider;
 
@@ -1303,6 +1292,24 @@ export async function initializeAgent(
   if (overrideProvider !== agent.provider) {
     agent.provider = overrideProvider;
   }
+
+  const _modelOptions = structuredClone(
+    Object.assign(
+      { model: agent.model },
+      agent.model_parameters ?? { model: agent.model },
+      isInitialAgent === true
+        ? selectRequestModelParameters({
+            requestEndpoint: endpointOption?.endpoint,
+            requestParameters: endpointOption?.model_parameters,
+            customEndpointConfig,
+          })
+        : {},
+    ),
+  );
+
+  const { resendFiles, maxContextTokens, imageDetail, modelOptions } = extractLibreChatParams(
+    _modelOptions as Record<string, unknown>,
+  );
 
   const finalModelOptions = {
     ...modelOptions,

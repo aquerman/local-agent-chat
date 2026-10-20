@@ -282,6 +282,8 @@ export interface IConversation extends Document {
   imageDetail?: string;
   agent_id?: string;
   codeApprovalMode?: CodeApprovalMode;
+  /** Tool names approved for the rest of this conversation ("always allow in this chat"). */
+  approvedTools?: string[];
   /** Private fence advanced when an admitted generation reads its decision. */
   codeEnvironmentRevision?: number;
   codeEnvironmentMode?: CodeEnvironmentMode;

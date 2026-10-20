@@ -53,6 +53,8 @@ const {
   hasDurableAgentInterruptCheckpoint,
   isHITLEnabled,
   resolveToolApprovalPolicy,
+  loadSessionApprovedTools,
+  getAgentThinkingSaveOptions,
   buildToolApprovalHooks,
   buildToolApprovalExecutionConfig,
   collectAttachedCodeEnvironmentAgentIds,
@@ -1965,6 +1967,10 @@ class AgentClient extends BaseClient {
           maxContextTokens: this.maxContextTokens,
           codeApprovalMode,
           ...persistedCodeEnvironmentDecision,
+          ...getAgentThinkingSaveOptions(
+            this.options.endpoint,
+            this.options.req.body?.endpointOption?.model_parameters,
+          ),
         },
         // TODO: PARSE OPTIONS BY PROVIDER, MAY CONTAIN SENSITIVE DATA
         runOptions,
@@ -4453,6 +4459,12 @@ class AgentClient extends BaseClient {
         endpoint: agentsEConfig?.toolApproval,
         attachedCodeEnvironment: attachedCodeEnvironmentAgentIds.size > 0,
       });
+      const sessionApprovedTools = await loadSessionApprovedTools({
+        policy: effectiveToolApprovalPolicy,
+        userId: this.options.req?.user?.id,
+        conversationId: this.conversationId,
+        getConversationApprovedTools: db.getConversationApprovedTools,
+      });
       const resolvedToolApprovalHooks = isHITLEnabled(effectiveToolApprovalPolicy)
         ? buildToolApprovalHooks({
             userId: this.options.req?.user?.id,
@@ -4928,6 +4940,7 @@ class AgentClient extends BaseClient {
           // leave this off so an approval-gated tool can't pause where there's no resume path.
           hitlCapable: true,
           resolvedToolApprovalHooks,
+          sessionApprovedTools,
           toolInputValidationErrors: this.toolInputValidationErrors,
           // Mid-run steering: drain queued user messages at each tool-batch
           // boundary and inject them into graph state. The offset wrapper
@@ -5331,6 +5344,12 @@ class AgentClient extends BaseClient {
             appConfig,
           })
         : undefined;
+      const sessionApprovedTools = await loadSessionApprovedTools({
+        policy: agentsEConfig?.toolApproval,
+        userId: this.options.req?.user?.id,
+        conversationId: this.conversationId,
+        getConversationApprovedTools: db.getConversationApprovedTools,
+      });
 
       BaseClient.prototype.setModelBoundStoredMessages.call(
         this,
@@ -5707,6 +5726,7 @@ class AgentClient extends BaseClient {
         // controller owns that lifecycle, so it must keep the HITL wiring on the rebuilt run.
         hitlCapable: true,
         resolvedToolApprovalHooks,
+        sessionApprovedTools,
         // Plugin SessionStart hooks match on the lifecycle source; a rebuilt run is a
         // resume, not a fresh startup.
         sessionStartSource: 'resume',

@@ -1742,6 +1742,9 @@ export const compactAgentsBaseSchema = tConversationSchema.pick({
   agent_id: true,
   instructions: true,
   additional_instructions: true,
+  /** The thinking pill's mode; the backend keeps it only for agents on a `llama_cpp_budget`
+   *  endpoint (`selectRequestModelParameters` in packages/api). */
+  reasoning_effort: true,
 });
 
 export const compactAgentsSchema = compactAgentsBaseSchema

@@ -42,6 +42,8 @@ const convoSchema: Schema<IConversation> = new Schema(
     },
     ...conversationPreset,
     codeEnvironmentRevision: { type: Number, select: false },
+    /** Tools the user chose "always allow in this chat" for; read by the tool-approval policy. */
+    approvedTools: { type: [String], default: undefined, select: false },
     agent_id: {
       type: String,
     },

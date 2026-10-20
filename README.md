@@ -59,6 +59,13 @@ from a phone over Tailscale.
 - **Voice.** Dictate with the mic button and have replies read aloud, in Dutch or English, through
   two local servers on the CPU (whisper.cpp and Piper), so the GPU stays with the model. Optional:
   see [docs/voice.md](docs/voice.md) for the install; `scripts\start-all.bat` starts them when present.
+- **Benny, the default agent.** New chats open on "Benny", an agent on the local model with web
+  search and ask-the-user, run through LibreChat's Agents endpoint (deferred tool loading, context
+  summarization, step limits sized for a 9B model). The thinking pill works there too. Create it once
+  with `npm run seed-benny`; the plain local-llm endpoint stays in the model selector.
+- **Approvals and questions.** Like Claude Desktop, read-only tools run on their own and anything
+  that writes, sends or deletes asks first: Approve (once), "Always allow in this chat", Reject or
+  Edit. The model can also stop and ask you a multiple-choice question.
 
 ## Running it (Windows)
 
@@ -71,6 +78,9 @@ cp .env.example .env
 cp bennychat.yaml librechat.yaml          # BennyChat's config, already wired to local-llm
 npm run build
 ```
+
+Start BennyChat once, register your account, then run `npm run seed-benny` (safe to repeat) to
+create the default Benny agent.
 
 Then start everything with `scripts\start-all.bat`. It opens one Windows Terminal window with a tab
 for llama-server and a tab for BennyChat, and skips whichever is already running.
