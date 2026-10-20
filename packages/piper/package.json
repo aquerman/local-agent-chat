@@ -1,0 +1,35 @@
+{
+  "name": "@librechat/piper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenAI-compatible /v1/audio/speech server for local Piper voices, for LibreChat's TTS",
+  "type": "commonjs",
+  "main": "dist/index.cjs",
+  "bin": {
+    "librechat-piper": "dist/index.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsdown",
+    "build:watch": "tsdown --watch",
+    "test": "jest --watch",
+    "test:ci": "jest --ci",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.cjs"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.5",
+    "@babel/preset-env": "^7.29.5",
+    "@babel/preset-typescript": "^7.21.0",
+    "@types/jest": "^29.5.2",
+    "@types/node": "^24.12.4",
+    "babel-jest": "^30.2.0",
+    "jest": "^30.2.0",
+    "rimraf": "^6.1.3",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3"
+  }
+}

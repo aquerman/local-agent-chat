@@ -61,7 +61,8 @@ syncs conflict only here.
   the LibreChat backend (this repo). `scripts\start-all.bat` starts both in one Windows Terminal
   window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. With chat
   search on it adds a Meilisearch tab (port 7700, see "Chat search"); with retrieval set up,
-  "Embeddings" and "RAG API" tabs (see "Knowledge and RAG"). The
+  "Embeddings" and "RAG API" tabs (see "Knowledge and RAG"); with voice installed, "Whisper" and
+  "Piper" tabs (ports 8082/8083, see "Voice"). The
   Desktop `Start All`, `Start Chat` and `Start Server` entries are shortcuts (`.lnk`) to the repo
   files, so editing a script here is enough.
 - `scripts\start-chat.bat` starts only LibreChat (`npm run backend`, which serves the built client).
@@ -191,6 +192,32 @@ syncs conflict only here.
   one matching chunk, rag_api logged `/embed` then `/query`, and the request was ~1.9k tokens where
   the whole file is ~6k. Not verified: the Windows scripts (no PowerShell or Windows here), the
   conda-forge packages, agent knowledge files, and Qwen3.5-9B.
+
+## Voice
+
+- Upstream speech (mic in the composer, speaker under messages) pointed at two CPU-only local servers;
+  config in `bennychat.yaml` ("Roadmap 11, voice"), setup in `docs/voice.md`. Both URLs are listed in
+  `speech.stt/tts.allowedAddresses`: the speech SSRF guard blocks loopback otherwise.
+- STT: whisper.cpp `bin\whisper\whisper-server.exe` (CPU zip) on `VOICE_STT_PORT` (8082) with
+  `--inference-path /v1/audio/transcriptions -l auto --convert`, so the stock `openai` provider works.
+  `--convert` shells out to ffmpeg (on `PATH`) for the browser's webm/ogg/mp4 recordings.
+- TTS: `packages/piper`, a small TS server on `VOICE_TTS_PORT` (8083) that spawns Piper's own
+  `python -m piper.http_server` (venv `bin\piper`, voices `bin\piper\voices`, `PIPER_PORT` 8084) and
+  answers OpenAI `POST /v1/audio/speech`: strips Markdown, picks the voice (`auto` = installed `nl_*`
+  voice for Dutch text, `en_*` for English), encodes mp3 via ffmpeg without ID3/Xing headers, because
+  LibreChat concatenates per-sentence mp3 replies into one `MediaSource` stream. It reads `.env` itself.
+  Tests: `cd packages/piper && npx jest`; typecheck `npx tsc --noEmit` there.
+- `speechTab` defaults mirror Claude: engines `external`, dictation stops on a second mic click and
+  fills the composer (no silence auto-stop, no auto-send), language auto-detected, automatic
+  read-aloud off. Browser-saved settings override them.
+- `scripts\start-all.bat` adds "Whisper" (`scripts\start-stt.bat`) and "Piper" (`scripts\start-tts.bat`)
+  tabs only when `bin\whisper\whisper-server.exe` / the `bin\piper` venv exist, and skips a listening
+  port. Changing a port means editing `.env` and `bennychat.yaml` both.
+- Verified 2026-10-20 in the Linux rig (whisper-server built from source, `ggml-base.bin`, Piper 1.8
+  with an English voice from PyPI): `/api/files/speech/stt` transcribed webm, ogg and m4a uploads,
+  `/tts/manual` returned mp3, and in Chromium with a fake microphone the mic button put the
+  transcript in the composer and "Read aloud" played. Not verified: the Windows binaries and
+  `--convert` on Windows, Dutch voices (HuggingFace is blocked in the rig) and Dutch transcription.
 
 ## Skills
 
