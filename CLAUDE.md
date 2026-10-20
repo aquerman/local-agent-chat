@@ -119,7 +119,9 @@ syncs conflict only here.
   screen: the desktop sidebar shows text rows (New chat, Chats, Agents, a Customize menu for the other
   panels, the account row) instead of the icon rail; the model selector sits next to Send; header
   actions live in the "…" menu at every width; the welcome-screen disclaimer is hidden; reply actions
-  appear on hover, the latest reply included. Conversation rows drop their endpoint icon.
+  appear on hover, the latest reply included. Conversation rows drop their endpoint icon. On
+  desktop (≥768px) the root font size is 112.5% (18px), set in `client/src/style.css` via
+  `html[data-layout="minimal"]`, which `routes/Root.tsx` sets.
 - Read it in the client with `useMinimalLayout()`. The mobile drawer is unchanged.
 
 ## Fork workflow (overrides upstream "Branching and Pull Requests")

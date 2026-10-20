@@ -28,6 +28,7 @@ import {
   useCatalogWarmup,
   useAgentsMap,
   useFileMap,
+  useMinimalLayout,
 } from '~/hooks';
 import KeyboardShortcutsDialog from '~/components/Nav/KeyboardShortcutsDialog';
 import KeyboardDeleteDialog from '~/components/Nav/KeyboardDeleteDialog';
@@ -123,6 +124,17 @@ export default function Root() {
   );
 
   useSearchEnabled(isAuthenticated);
+
+  /** Exposes the layout to `style.css`, which enlarges the root font size for it on desktop. */
+  const minimalLayout = useMinimalLayout();
+  useEffect(() => {
+    const root = document.documentElement;
+    if (minimalLayout) {
+      root.dataset.layout = 'minimal';
+      return;
+    }
+    delete root.dataset.layout;
+  }, [minimalLayout]);
 
   useEffect(() => {
     if (termsData) {

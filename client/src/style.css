@@ -6,6 +6,14 @@
   scroll-margin-top: 4rem;
 }
 
+/* The minimal layout reads at 18px instead of 16px on desktop; every rem-sized element scales with
+   it. Phones keep the stock size. A percentage, so a larger browser default still adds to it. */
+@media (min-width: 768px) {
+  html[data-layout='minimal'] {
+    font-size: 112.5%;
+  }
+}
+
 /* Custom Variables */
 :root {
   --white: 255 255 255;
