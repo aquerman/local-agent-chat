@@ -311,6 +311,20 @@ describe('loadAgent', () => {
        *  pick is gone, the spec's pin stays. */
       expect(body.ephemeralAgent.mcp).toEqual(['visible', 'hidden']);
     });
+
+    test('attaches an alwaysOn server the picker never selected', async () => {
+      mockGetAccessibleMCPServers.mockResolvedValue({
+        visible: { chatMenu: true },
+        websearch: { alwaysOn: true },
+      });
+      const body = { ephemeralAgent: { mcp: [] as string[] } };
+
+      const result = await loadEphemeral({ mcpConfig: {} }, body);
+
+      expect(selectedServerNames()).toEqual(['websearch']);
+      expect(result?.tools).toContain('tool_mcp_websearch');
+      expect(body.ephemeralAgent.mcp).toEqual(['websearch']);
+    });
   });
 
   test('addresses cached tools with a non-ephemeral request overlay', async () => {

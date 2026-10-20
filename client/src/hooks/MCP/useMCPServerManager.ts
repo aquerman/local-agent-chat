@@ -140,7 +140,10 @@ export function useMCPServerManager({
 
   // Memoize filtered servers for useMCPSelect to prevent infinite loops
   const selectableServers = useMemo(
-    () => availableMCPServers.filter((s) => s.config.chatMenu !== false && !s.consumeOnly),
+    () =>
+      availableMCPServers.filter(
+        (s) => s.config.chatMenu !== false && s.config.alwaysOn !== true && !s.consumeOnly,
+      ),
     [availableMCPServers],
   );
 
@@ -836,7 +839,7 @@ export function useMCPServerManager({
 
   return {
     availableMCPServers,
-    /** MCP servers filtered for chat menu selection (chatMenu !== false && !consumeOnly) */
+    /** MCP servers filtered for chat menu selection (chatMenu !== false && !alwaysOn && !consumeOnly) */
     selectableServers,
     availableMCPServersMap: loadedServers,
     isLoading,

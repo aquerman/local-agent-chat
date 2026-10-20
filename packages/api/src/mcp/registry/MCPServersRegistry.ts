@@ -128,6 +128,7 @@ const ADMIN_CONFIGURABLE_FIELDS = [
   'iconPath',
   'startup',
   'chatMenu',
+  'alwaysOn',
   'serverInstructions',
   'customUserVars',
   'timeout',
