@@ -109,7 +109,11 @@ syncs conflict only here.
   (`WEBSEARCH_MAX_CHARS`, `WEBSEARCH_TIMEOUT_MS`, `WEBSEARCH_MAX_BYTES` — raw download cap,
   default 5 MB; the error text reports the configured cap). `npm run build` builds it with the other
   workspaces; the backend must be restarted after a rebuild.
-- Enable it per chat from the MCP selector in the input badge row. Debug the server alone with
+- `alwaysOn: true` on the server (a fork-added MCP option, `packages/data-provider/src/mcp.ts`) attaches
+  it to every chat, like thinking, and drops it from the MCP picker; with no other chat-selectable
+  server the picker disappears. The backend adds it in `resolveChatMCPServers`
+  (`packages/api/src/mcp/utils.ts`). Agents still list their own servers. Without the flag it is
+  enabled per chat from the MCP selector in the input badge row. Debug the server alone with
   `npx @modelcontextprotocol/inspector node packages/websearch/dist/index.cjs`.
 - Tests: `cd packages/websearch && npx jest`; typecheck with `npx tsc --noEmit` there.
 - Verified 2026-10-01 with Qwen2.5-7B-Instruct Q4_K_M (`--jinja`): asked for today's news, the

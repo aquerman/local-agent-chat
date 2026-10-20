@@ -18,7 +18,7 @@ import type { AppConfig } from '@librechat/data-schemas';
 import type { ParsedServerConfig } from '~/mcp/types';
 import {
   requiresEphemeralUserConnection,
-  filterChatSelectableMCPServers,
+  resolveChatMCPServers,
   validateMCPServerConfig,
 } from '~/mcp/utils';
 import { ASK_USER_QUESTION_TOOL_NAME } from '~/agents/hitl/askUserQuestionTool';
@@ -79,11 +79,11 @@ export async function loadEphemeralAgent(
   }
   const ephemeralAgent: TEphemeralAgent | undefined = req.body?.ephemeralAgent;
   const userId = req.user?.id ?? '';
-  /** The picker's own selection is narrowed to what the picker may offer; a
-   *  spec's servers are the operator's choice and are added after, so pinning a
-   *  chat-hidden server to a spec keeps working. */
+  /** The picker's own selection is narrowed to what the picker may offer and
+   *  joined by the operator's `alwaysOn` servers; a spec's servers are added
+   *  after, so pinning a chat-hidden server to a spec keeps working. */
   const mcpServers = new Set<string>(
-    await filterChatSelectableMCPServers(ephemeralAgent?.mcp, {
+    await resolveChatMCPServers(ephemeralAgent?.mcp, {
       userId,
       role: req.user?.role,
       getAccessibleMCPServers: deps.getAccessibleMCPServers,
@@ -98,7 +98,7 @@ export async function loadEphemeralAgent(
    *  instruction path reads `req.body.ephemeralAgent.mcp` directly and prefers
    *  it over the agent's tools, so it would otherwise both inject a hidden
    *  server's `serverInstructions` and omit a spec-pinned server's. */
-  if (ephemeralAgent != null && Array.isArray(ephemeralAgent.mcp)) {
+  if (ephemeralAgent != null && (Array.isArray(ephemeralAgent.mcp) || mcpServers.size > 0)) {
     ephemeralAgent.mcp = [...mcpServers];
   }
   const tools: string[] = [];

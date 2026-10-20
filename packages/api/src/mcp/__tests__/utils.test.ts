@@ -26,7 +26,7 @@ import {
   requiresEphemeralUserConnection,
   requiresOAuthMachinery,
   isChatSelectableMCPServer,
-  filterChatSelectableMCPServers,
+  resolveChatMCPServers,
   waitUntilDeadline,
 } from '~/mcp/utils';
 import { usesDirectOpenIDBearerRecovery } from '~/mcp/openid';
@@ -1404,7 +1404,7 @@ describe('isChatSelectableMCPServer', () => {
   });
 });
 
-describe('filterChatSelectableMCPServers', () => {
+describe('resolveChatMCPServers', () => {
   const catalog = {
     visible: { chatMenu: true },
     hidden: { chatMenu: false },
@@ -1418,7 +1418,7 @@ describe('filterChatSelectableMCPServers', () => {
 
   it('drops servers hidden from the chat menu', async () => {
     await expect(
-      filterChatSelectableMCPServers(['visible', 'hidden'], {
+      resolveChatMCPServers(['visible', 'hidden'], {
         userId: 'user123',
         getAccessibleMCPServers: accessible,
       }),
@@ -1427,7 +1427,7 @@ describe('filterChatSelectableMCPServers', () => {
 
   it('drops servers the user only reaches through an agent', async () => {
     await expect(
-      filterChatSelectableMCPServers(['visible', 'agent-only'], {
+      resolveChatMCPServers(['visible', 'agent-only'], {
         userId: 'user123',
         getAccessibleMCPServers: accessible,
       }),
@@ -1436,7 +1436,7 @@ describe('filterChatSelectableMCPServers', () => {
 
   it('keeps servers with the flags unset', async () => {
     await expect(
-      filterChatSelectableMCPServers(['unset'], {
+      resolveChatMCPServers(['unset'], {
         userId: 'user123',
         getAccessibleMCPServers: accessible,
       }),
@@ -1445,7 +1445,7 @@ describe('filterChatSelectableMCPServers', () => {
 
   it('resolves the catalog once, however long the selection', async () => {
     await expect(
-      filterChatSelectableMCPServers(['visible', 'visible', 'unset', 'visible'], {
+      resolveChatMCPServers(['visible', 'visible', 'unset', 'visible'], {
         userId: 'user123',
         getAccessibleMCPServers: accessible,
       }),
@@ -1454,7 +1454,7 @@ describe('filterChatSelectableMCPServers', () => {
   });
 
   it('passes the role through, since it scopes what the user can reach', async () => {
-    await filterChatSelectableMCPServers(['visible'], {
+    await resolveChatMCPServers(['visible'], {
       userId: 'user123',
       role: 'ADMIN',
       getAccessibleMCPServers: accessible,
@@ -1464,7 +1464,7 @@ describe('filterChatSelectableMCPServers', () => {
 
   it('drops a hidden server named by its normalized spelling', async () => {
     await expect(
-      filterChatSelectableMCPServers(['private_server'], {
+      resolveChatMCPServers(['private_server'], {
         userId: 'user123',
         getAccessibleMCPServers: accessible,
       }),
@@ -1477,7 +1477,7 @@ describe('filterChatSelectableMCPServers', () => {
       private_server: { chatMenu: true },
     }));
     await expect(
-      filterChatSelectableMCPServers(['private_server'], {
+      resolveChatMCPServers(['private_server'], {
         userId: 'user123',
         getAccessibleMCPServers: crossTier,
       }),
@@ -1486,7 +1486,7 @@ describe('filterChatSelectableMCPServers', () => {
 
   it('keeps a request-tier server the registry does not know', async () => {
     await expect(
-      filterChatSelectableMCPServers(['body-scoped'], {
+      resolveChatMCPServers(['body-scoped'], {
         userId: 'user123',
         getAccessibleMCPServers: accessible,
       }),
@@ -1498,7 +1498,7 @@ describe('filterChatSelectableMCPServers', () => {
       throw new Error('registry unavailable');
     });
     await expect(
-      filterChatSelectableMCPServers(['a', 'b'], {
+      resolveChatMCPServers(['a', 'b'], {
         userId: 'user123',
         getAccessibleMCPServers: failing,
       }),
@@ -1506,16 +1506,48 @@ describe('filterChatSelectableMCPServers', () => {
   });
 
   it('uses the selection as sent when no resolver is supplied', async () => {
-    await expect(
-      filterChatSelectableMCPServers(['a', 'a', 'b'], { userId: 'user123' }),
-    ).resolves.toEqual(['a', 'b']);
+    await expect(resolveChatMCPServers(['a', 'a', 'b'], { userId: 'user123' })).resolves.toEqual([
+      'a',
+      'b',
+    ]);
   });
 
   it('returns an empty array for an empty or missing selection', async () => {
     const opts = { userId: 'u', getAccessibleMCPServers: accessible };
-    await expect(filterChatSelectableMCPServers([], opts)).resolves.toEqual([]);
-    await expect(filterChatSelectableMCPServers(undefined, opts)).resolves.toEqual([]);
-    await expect(filterChatSelectableMCPServers(null, opts)).resolves.toEqual([]);
+    await expect(resolveChatMCPServers([], opts)).resolves.toEqual([]);
+    await expect(resolveChatMCPServers(undefined, opts)).resolves.toEqual([]);
+    await expect(resolveChatMCPServers(null, opts)).resolves.toEqual([]);
+  });
+
+  describe('alwaysOn servers', () => {
+    const withAlwaysOn = jest.fn(async () => ({
+      ...catalog,
+      websearch: { alwaysOn: true, chatMenu: false },
+    }));
+
+    it('attaches them with no selection at all', async () => {
+      const opts = { userId: 'u', getAccessibleMCPServers: withAlwaysOn };
+      await expect(resolveChatMCPServers(undefined, opts)).resolves.toEqual(['websearch']);
+      await expect(resolveChatMCPServers([], opts)).resolves.toEqual(['websearch']);
+    });
+
+    it('adds them after the narrowed selection, without duplicates', async () => {
+      await expect(
+        resolveChatMCPServers(['visible', 'hidden', 'websearch'], {
+          userId: 'u',
+          getAccessibleMCPServers: withAlwaysOn,
+        }),
+      ).resolves.toEqual(['visible', 'websearch']);
+    });
+
+    it('falls back to the selection alone when the catalog lookup fails', async () => {
+      const failing = jest.fn(async () => {
+        throw new Error('registry unavailable');
+      });
+      await expect(
+        resolveChatMCPServers(['a'], { userId: 'u', getAccessibleMCPServers: failing }),
+      ).resolves.toEqual(['a']);
+    });
   });
 });
 

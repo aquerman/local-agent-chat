@@ -241,6 +241,12 @@ const BaseOptionsSchema = z.object({
    */
   chatMenu: z.boolean().optional(),
   /**
+   * Attaches the server to every chat without a picker selection, the way a
+   * model spec's `mcpServers` does for one spec. It is also left out of the
+   * chat dropdown, since there is nothing to toggle. Agents are unaffected.
+   */
+  alwaysOn: z.boolean().optional(),
+  /**
    * Controls server instruction behavior:
    * - undefined/not set: No instructions included (default)
    * - true: Use server-provided instructions
@@ -498,6 +504,7 @@ const omitServerManagedFields = <T extends z.ZodObject<z.ZodRawShape>>(schema: T
     oauthRefreshCoordination: true,
     oauthPersistenceWaitTimeout: true,
     chatMenu: true,
+    alwaysOn: true,
     serverInstructions: true,
     requiresOAuth: true,
     customUserVars: true,
