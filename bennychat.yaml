@@ -108,6 +108,9 @@ endpoints:
         - 'view*_mcp_*'
         - 'query*_mcp_*'
         - 'describe*_mcp_*'
+        # Roadmap 4: Todoist's one read tool without a read verb. Its writes (add-*, update-*,
+        # complete-tasks, delete-object, ...) match nothing here, so they ask.
+        - 'user-info_mcp_todoist'
       reason: 'Benny wants to run {tool}. It can change data outside this chat.'
     # Paused runs (approval or Ask User) wait up to a day in MongoDB, then expire.
     checkpointer:
@@ -144,6 +147,69 @@ mcpServers:
       # Microsoft Edge on Windows; set it to a chrome.exe / msedge.exe to pick another browser.
       WEBSEARCH_RENDER: 'auto'
       WEBSEARCH_BROWSER_PATH: ''
+
+  # --- Roadmap 4, connectors: Todoist, calendar, email (docs/connectors.md) --------------------
+  # Like Claude Desktop's connectors: nothing starts at boot (`startup: false`), each user connects
+  # their own account from the MCP panel (Todoist by OAuth in the browser, calendar and email by
+  # filling in per-user settings, stored encrypted in MongoDB, never in .env or git). Pick a
+  # connector per chat in the MCP selector, or add it to an agent. Read tools run freely; writes
+  # ask first through `endpoints.agents.toolApproval` (roadmap 13), which asks for every tool its
+  # `allow` list does not name. Calendar and email have no write tools at all.
+  todoist:
+    title: 'Todoist'
+    description: 'Your Todoist tasks and projects (official Todoist MCP server, sign in with OAuth)'
+    type: streamable-http
+    url: 'https://ai.todoist.net/mcp'
+    requiresOAuth: true
+    startup: false
+    # Todoist's server registers LibreChat as an OAuth client on first connect (dynamic client
+    # registration) and redirects back to <DOMAIN_SERVER>/api/mcp/todoist/oauth/callback.
+    timeout: 60000
+  calendar:
+    title: 'Calendar'
+    description: 'Read-only: your calendar events from a private iCal (ICS) address'
+    type: stdio
+    command: node
+    args: ['packages/calendar/dist/index.cjs']
+    startup: false
+    customUserVars:
+      CALENDAR_ICS_URL:
+        title: 'Calendar address (ICS)'
+        description: 'The secret iCal address of your calendar (Google: calendar settings, "Secret address in iCal format"; Outlook: Settings, Shared calendars, Publish). Several: separate with |'
+        sensitive: true
+    env:
+      CALENDAR_ICS_URL: '{{CALENDAR_ICS_URL}}'
+      # Empty = Windows' own time zone. Set an IANA name (e.g. Europe/Amsterdam) to override.
+      CALENDAR_TIMEZONE: ''
+      CALENDAR_CACHE_SECONDS: '300'
+  email:
+    title: 'Email'
+    description: 'Read-only: search and read your mailbox over IMAP (no sending)'
+    type: stdio
+    command: node
+    args: ['packages/email/dist/index.cjs']
+    startup: false
+    customUserVars:
+      EMAIL_IMAP_HOST:
+        title: 'IMAP server'
+        description: 'For example imap.gmail.com or imap.fastmail.com (port 993, TLS)'
+        sensitive: false
+      EMAIL_USER:
+        title: 'User name'
+        description: 'Usually your full email address'
+        sensitive: false
+      EMAIL_PASSWORD:
+        title: 'App password'
+        description: 'An app-specific password (Gmail: Google account, Security, App passwords), not your normal password'
+        sensitive: true
+    env:
+      EMAIL_IMAP_HOST: '{{EMAIL_IMAP_HOST}}'
+      EMAIL_USER: '{{EMAIL_USER}}'
+      EMAIL_PASSWORD: '{{EMAIL_PASSWORD}}'
+      # Empty = port 993 with TLS (Gmail, Fastmail, iCloud and most providers).
+      EMAIL_IMAP_PORT: ''
+      EMAIL_IMAP_SECURE: ''
+      EMAIL_MAX_CHARS: '4000'
 
 # Artifacts offline (roadmap 5c): nothing to switch on in this file. Artifacts are enabled per chat
 # from the Tools menu. For previews without the internet, set in .env:
