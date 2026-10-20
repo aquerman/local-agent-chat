@@ -17,7 +17,8 @@ const EXTENSIONS: Record<string, string> = {
   'text/html': 'html',
 };
 
-const UNSAFE_NAME = /[<>:"/\\|?*\p{Cc}]+/gu;
+/** Characters the pipeline would rewrite (and then disambiguate with a hash suffix). */
+const UNSAFE_NAME = /[^\p{L}\p{N}\p{M}._-]+/gu;
 
 function lastSegment(uri: string): string {
   const withoutQuery = uri.split(/[?#]/)[0] ?? '';
@@ -33,12 +34,15 @@ function lastSegment(uri: string): string {
 
 /**
  * Names the attachment after the last segment of the resource URI, the only name an embedded
- * resource carries, made safe for every storage strategy. A name without an extension gets one
+ * resource carries, reduced to the characters the file-output pipeline stores unchanged
+ * (`sanitizeArtifactPath`), so `Q3 report.pdf` arrives as `Q3_report.pdf` rather than with a hash. A name without an extension gets one
  * from the MIME type so the client can pick a viewer.
  */
 export function filenameFromUri(uri: string, mimeType: string): string {
-  const cleaned = lastSegment(uri).replace(UNSAFE_NAME, ' ').replace(/\s+/g, ' ').trim();
-  const base = cleaned.replace(/^\.+/, '').slice(0, 120).trim() || 'file';
+  const cleaned = lastSegment(uri)
+    .replace(UNSAFE_NAME, '_')
+    .replace(/^[._]+|_+$/g, '');
+  const base = cleaned.slice(0, 120) || 'file';
   if (/\.[A-Za-z0-9]{1,8}$/.test(base)) {
     return base;
   }

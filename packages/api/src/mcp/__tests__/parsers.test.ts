@@ -893,14 +893,14 @@ describe('formatToolContent', () => {
       });
 
       expect(content).toBe(
-        'Created the report.\n\nFile attached to the chat for the user: Q3 report.pdf (application/pdf, 1 KB)',
+        'Created the report.\n\nFile attached to the chat for the user: Q3_report.pdf (application/pdf, 1 KB)',
       );
       expect(content).not.toContain(pdf);
       expect(artifacts?.mcp_files).toEqual([
         {
           serverName: 'documents',
           uri: 'documents://abc/Q3%20report.pdf',
-          filename: 'Q3 report.pdf',
+          filename: 'Q3_report.pdf',
           mimeType: 'application/pdf',
           data: pdf,
           bytes: 16,

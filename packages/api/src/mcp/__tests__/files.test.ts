@@ -3,15 +3,16 @@ import { filenameFromUri, prepareMCPFileOutputs, toMCPFileOutput } from '../file
 describe('filenameFromUri', () => {
   it('uses the decoded last URI segment', () => {
     expect(filenameFromUri('documents://abc/Q3%20report.docx', 'application/pdf')).toBe(
-      'Q3 report.docx',
+      'Q3_report.docx',
     );
     expect(filenameFromUri('file:///tmp/out.csv?x=1#y', 'text/csv')).toBe('out.csv');
   });
 
   it('strips unsafe characters and leading dots', () => {
-    expect(filenameFromUri('x://a/..%2F..%2Fsecret%3A.txt', 'text/plain')).toBe('secret .txt');
+    expect(filenameFromUri('x://a/..%2F..%2Fsecret%3A.txt', 'text/plain')).toBe('secret_.txt');
     expect(filenameFromUri('x://a/.env', 'text/plain')).toBe('env.txt');
-    expect(filenameFromUri('x://a/%E0%A4%A', 'text/plain')).toBe('%E0%A4%A.txt');
+    expect(filenameFromUri('x://a/Café menu.pdf', 'application/pdf')).toBe('Café_menu.pdf');
+    expect(filenameFromUri('x://a/%E0%A4%A', 'text/plain')).toBe('E0_A4_A.txt');
   });
 
   it('adds an extension from the MIME type when missing', () => {
