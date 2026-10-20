@@ -126,7 +126,8 @@ syncs conflict only here.
   appear on hover, the latest reply included. Conversation rows drop their endpoint icon. On
   desktop (≥768px) the root font size is 112.5% (18px), set in `client/src/style.css` via
   `html[data-layout="minimal"]`, which `routes/Root.tsx` sets.
-- Read it in the client with `useMinimalLayout()`. The mobile drawer is unchanged.
+- Read it in the client with `useMinimalLayout()`. On a phone the drawer keeps its stock structure but its
+  text is one size larger (`MINIMAL_DRAWER_TEXT` in `client/src/components/UnifiedSidebar/constants.ts`).
 
 ## Fork workflow (overrides upstream "Branching and Pull Requests")
 

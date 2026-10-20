@@ -87,3 +87,13 @@ export const DRAWER_UNPAINTED = 'hidden';
  * waiting for the deferred Recoil commit that a large conversation stalls.
  */
 export const MOBILE_SCRIM_ID = 'mobile-drawer-scrim';
+
+/**
+ * Steps the mobile drawer's text up one size in the minimal layout: rows,
+ * section labels, search and the bottom bar are written as `text-sm`/`text-xs`
+ * for the desktop sidebar and read too small on a phone. Descendant variants
+ * rather than per-component props, because those classes live in shared
+ * components (Conversations, SearchBar) that the desktop sidebar also renders.
+ * Menus open in portals outside the drawer and keep their size.
+ */
+export const MINIMAL_DRAWER_TEXT = '[&_.text-sm]:text-base [&_.text-xs]:text-sm';
