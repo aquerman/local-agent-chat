@@ -17,6 +17,7 @@ const {
   getBalanceConfig,
   omitTitleOptions,
   getProviderConfig,
+  disableThinkingForTitle,
   formatMemoryContext,
   createCachedTokenCounter,
   applyContextToAgent,
@@ -6086,6 +6087,7 @@ class AgentClient extends BaseClient {
     if (anthropicClientOptions?.defaultHeaders != null && clientOptions.clientOptions == null) {
       clientOptions.clientOptions = anthropicClientOptions;
     }
+    clientOptions = disableThinkingForTitle(clientOptions);
 
     if (
       provider === Providers.GOOGLE &&

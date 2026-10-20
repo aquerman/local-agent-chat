@@ -1918,3 +1918,67 @@ describe('applyDefaultParams', () => {
     });
   });
 });
+
+describe('llama_cpp_budget reasoning format', () => {
+  const base = {
+    apiKey: 'Benner',
+    streaming: true,
+    endpoint: 'Benner',
+    baseURL: 'http://127.0.0.1:8080/v1',
+    reasoningFormat: ReasoningParameterFormat.llamaCppBudget,
+  };
+
+  it('turns Off into enable_thinking false with no budget', () => {
+    const { llmConfig } = getOpenAILLMConfig({
+      ...base,
+      modelOptions: { model: 'local', reasoning_effort: ReasoningEffort.none },
+    });
+    expect(llmConfig.modelKwargs).toEqual({ chat_template_kwargs: { enable_thinking: false } });
+    expect(llmConfig).not.toHaveProperty('reasoning_effort');
+  });
+
+  it.each([
+    [ReasoningEffort.low, 512],
+    [ReasoningEffort.medium, 2048],
+    [ReasoningEffort.high, 6144],
+    [ReasoningEffort.unset, 512],
+    [ReasoningEffort.minimal, 512],
+    [ReasoningEffort.xhigh, 6144],
+    [ReasoningEffort.max, 6144],
+  ])('maps %s to a %i-token budget', (effort, budget) => {
+    const { llmConfig } = getOpenAILLMConfig({
+      ...base,
+      modelOptions: { model: 'local', reasoning_effort: effort },
+    });
+    expect(llmConfig.modelKwargs).toEqual({
+      chat_template_kwargs: { enable_thinking: true },
+      thinking_budget_tokens: budget,
+    });
+    expect(llmConfig.modelKwargs).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('applies a budget even when no effort was ever chosen', () => {
+    const { llmConfig } = getOpenAILLMConfig({ ...base, modelOptions: { model: 'local' } });
+    expect(llmConfig.modelKwargs).toMatchObject({ thinking_budget_tokens: 512 });
+  });
+
+  it('uses configured budgets over the defaults', () => {
+    const { llmConfig } = getOpenAILLMConfig({
+      ...base,
+      thinkingBudgets: { low: 100, medium: 200, high: 300 },
+      modelOptions: { model: 'local', reasoning_effort: ReasoningEffort.medium },
+    });
+    expect(llmConfig.modelKwargs).toMatchObject({ thinking_budget_tokens: 200 });
+  });
+
+  it('keeps other chat_template_kwargs from addParams', () => {
+    const { llmConfig } = getOpenAILLMConfig({
+      ...base,
+      addParams: { chat_template_kwargs: { foo: 'bar' } },
+      modelOptions: { model: 'local', reasoning_effort: ReasoningEffort.none },
+    });
+    expect(llmConfig.modelKwargs).toEqual({
+      chat_template_kwargs: { foo: 'bar', enable_thinking: false },
+    });
+  });
+});

@@ -1649,6 +1649,16 @@ export const paramDefinitionSchema = z.object({
   selectPlaceholderCode: z.boolean().optional(),
 });
 
+/** Reasoning-token budgets per thinking mode, for `reasoningFormat: 'llama_cpp_budget'`. */
+export const thinkingBudgetsSchema = z
+  .object({
+    low: z.number().int().positive(),
+    medium: z.number().int().positive(),
+    high: z.number().int().positive(),
+  })
+  .strict();
+export type TThinkingBudgets = z.infer<typeof thinkingBudgetsSchema>;
+
 export const endpointSchema = baseEndpointSchema.merge(
   z.object({
     name: z.string().refine((value) => !eModelEndpointSchema.safeParse(value).success, {
@@ -1684,6 +1694,8 @@ export const endpointSchema = baseEndpointSchema.merge(
         defaultParamsEndpoint: z.string().default('custom'),
         reasoningFormat: eReasoningParameterFormatSchema.optional(),
         reasoningKey: eReasoningResponseKeySchema.optional(),
+        /** Budgets used when `reasoningFormat` is `llama_cpp_budget`. */
+        thinkingBudgets: thinkingBudgetsSchema.optional(),
         /** Replays `reasoning_content` within a run's tool-call turns (e.g. Xiaomi MiMo, Kimi). */
         includeReasoningContent: z.boolean().optional(),
         /** Also reconstructs `reasoning_content` from persisted history across turns (implies `includeReasoningContent`). */
@@ -4481,6 +4493,8 @@ export enum LocalStorageKeys {
   PIN_CODE_INTERPRETER_ = 'PIN_CODE_INTERPRETER_',
   /** Key for the last selected code approval mode */
   LAST_CODE_APPROVAL_MODE = 'lastCodeApprovalMode',
+  /** Last thinking mode picked, used to seed new conversations on llama_cpp_budget endpoints */
+  LAST_THINKING_MODE = 'lastThinkingMode',
 }
 
 export enum ForkOptions {

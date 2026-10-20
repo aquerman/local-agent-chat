@@ -8,8 +8,8 @@ import {
   supportsAdaptiveThinking,
 } from 'librechat-data-provider';
 import type { BindToolsInput } from '@librechat/agents/langchain/language_models/chat_models';
+import type { SettingDefinition, TThinkingBudgets } from 'librechat-data-provider';
 import type { AzureOpenAIInput } from '@librechat/agents/langchain/openai';
-import type { SettingDefinition } from 'librechat-data-provider';
 import type { OpenAI } from 'openai';
 import type * as t from '~/types';
 import {
@@ -440,6 +440,60 @@ export function resolveReasoningParams({
   return resolved;
 }
 
+export const DEFAULT_THINKING_BUDGETS: TThinkingBudgets = { low: 512, medium: 2048, high: 6144 };
+
+/**
+ * Folds stored efforts outside Off/Low/Medium/High onto the nearest mode, so a
+ * conversation saved with `minimal` or `max` from the old side panel still sends
+ * a valid budget. The return type `keyof TThinkingBudgets` is `'low' | 'medium' | 'high'`,
+ * which lets the caller index the budgets object without a cast.
+ */
+function toBudgetLevel(effort?: string | null): keyof TThinkingBudgets {
+  if (effort === ReasoningEffort.medium) {
+    return 'medium';
+  }
+  if (
+    effort === ReasoningEffort.high ||
+    effort === ReasoningEffort.xhigh ||
+    effort === ReasoningEffort.max
+  ) {
+    return 'high';
+  }
+  return 'low';
+}
+
+/**
+ * llama-server's per-request thinking switches. Unlike the other formats this one
+ * always writes something: an unset effort means Low, because an uncapped Qwen3.5
+ * can spend the whole reply allowance thinking and never answer.
+ */
+export function applyLlamaCppThinking({
+  reasoningEffort,
+  thinkingBudgets = DEFAULT_THINKING_BUDGETS,
+  modelKwargs,
+}: {
+  reasoningEffort?: string | null;
+  thinkingBudgets?: TThinkingBudgets;
+  modelKwargs: Record<string, unknown>;
+}): boolean {
+  const inherited = modelKwargs.chat_template_kwargs;
+  const templateKwargs =
+    inherited != null && typeof inherited === 'object' && !Array.isArray(inherited)
+      ? (inherited as Record<string, unknown>)
+      : {};
+  delete modelKwargs.reasoning_effort;
+
+  if (reasoningEffort === ReasoningEffort.none) {
+    modelKwargs.chat_template_kwargs = { ...templateKwargs, enable_thinking: false };
+    delete modelKwargs.thinking_budget_tokens;
+    return true;
+  }
+
+  modelKwargs.chat_template_kwargs = { ...templateKwargs, enable_thinking: true };
+  modelKwargs.thinking_budget_tokens = thinkingBudgets[toBudgetLevel(reasoningEffort)];
+  return true;
+}
+
 function applyReasoningConfig({
   endpoint,
   llmConfig,
@@ -600,6 +654,7 @@ export function getOpenAILLMConfig({
   defaultParams,
   useOpenRouter,
   reasoningFormat = ReasoningParameterFormat.reasoningEffort,
+  thinkingBudgets,
   modelOptions: _modelOptions,
 }: {
   apiKey: string;
@@ -612,6 +667,7 @@ export function getOpenAILLMConfig({
   defaultParams?: Record<string, unknown>;
   useOpenRouter?: boolean;
   reasoningFormat?: ReasoningParameterFormat;
+  thinkingBudgets?: TThinkingBudgets;
   azure?: false | t.AzureOptions;
 }): Pick<t.LLMConfigResult, 'llmConfig' | 'tools'> & {
   azure?: t.AzureOptions;
@@ -925,7 +981,10 @@ export function getOpenAILLMConfig({
 
   const solLunaRulesApply =
     firstPartyEndpoint && /^gpt-6-(?:sol|luna)(?:-|$)/i.test(llmConfig.model ?? '');
-  if (!useOpenRouter) {
+  if (reasoningFormat === ReasoningParameterFormat.llamaCppBudget) {
+    hasModelKwargs =
+      applyLlamaCppThinking({ reasoningEffort, thinkingBudgets, modelKwargs }) || hasModelKwargs;
+  } else if (!useOpenRouter) {
     hasModelKwargs =
       applyReasoningConfig({
         endpoint,

@@ -248,6 +248,10 @@ export enum ReasoningParameterFormat {
   disabled = 'disabled',
   reasoningEffort = 'reasoning_effort',
   reasoningObject = 'reasoning_object',
+  /** llama.cpp `llama-server`: effort is sent as `chat_template_kwargs.enable_thinking`
+   *  plus `thinking_budget_tokens`, because chat templates such as Qwen3.5's ignore
+   *  `reasoning_effort`. See docs/adr/0001-thinking-mode-translated-in-librechat.md. */
+  llamaCppBudget = 'llama_cpp_budget',
 }
 
 export enum ReasoningResponseKey {

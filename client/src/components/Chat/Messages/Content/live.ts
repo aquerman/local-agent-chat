@@ -144,37 +144,6 @@ function toolCallLine(
   };
 }
 
-/** Bounds the sentence scan on long reasoning, like the streaming peek. */
-const REASONING_TAIL_CHARS = 1200;
-
-/**
- * A bounded preview of the sentence the thought is currently writing.
- * Preview offsets are not activity identities: a sliding window, whitespace
- * or a resumed snapshot can move them without starting a new thought.
- */
-function lastReasoningSentence(reasoning: string): string | undefined {
-  const tail = reasoning
-    .slice(-REASONING_TAIL_CHARS)
-    .replace(/^\s*<think>\s*/, '')
-    .replace(/\s*<\/think>\s*$/, '')
-    .trimEnd();
-  if (!tail) {
-    return undefined;
-  }
-  let start = 0;
-  /** CJK sentences end in full-width marks with no space after them. */
-  const boundary = /[.!?]\s+|[。！？]\s*/g;
-  for (let match = boundary.exec(tail); match != null; match = boundary.exec(tail)) {
-    const end = match.index + match[0].length;
-    /** A mark that closes the tail ends the CURRENT sentence; it does not
-     *  start an empty one. The finished sentence stays until the next begins. */
-    if (end < tail.length) {
-      start = end;
-    }
-  }
-  return boundIntentLabel(tail.slice(start));
-}
-
 /**
  * A foreground subagent still running. Its card is a live surface of its own:
  * the ticker and the terminal error/stop state come from the subagent progress
@@ -265,13 +234,10 @@ function newestLine(
     }
     if (part.type === ContentTypes.THINK) {
       /** Reached before any call or label, this thought IS the tail — the
-       *  model is reasoning about its next step. Its multi-line peek stays
-       *  inside the fold, so the header previews it one sentence at a time. */
+       *  model is reasoning about its next step. The header names it by its
+       *  generated label or "Thinking...", never by its text: reasoning is not
+       *  shown while it streams (docs/adr/0001, Thinking indicator). */
       const reasoning = typeof part.think === 'string' ? part.think : (part.think?.value ?? '');
-      const sentence = lastReasoningSentence(reasoning);
-      if (sentence != null) {
-        return { text: sentence, source: `think:${position}`, comboCount: 1 };
-      }
       const label = part.reasoning_label?.trim();
       if (label || reasoning.trim()) {
         return {

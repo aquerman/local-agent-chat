@@ -19,6 +19,7 @@ import type {
 import type {
   CodeEnvironmentUserConfigSchema,
   CodeEnvironmentUserSettings,
+  TThinkingBudgets,
   TAgentsEndpoint,
 } from './config';
 import type { StatefulCodeEnvironment } from './stateful-code';
@@ -686,6 +687,7 @@ export type TConfig = {
     defaultParamsEndpoint?: string;
     reasoningFormat?: ReasoningParameterFormat;
     reasoningKey?: ReasoningResponseKey;
+    thinkingBudgets?: TThinkingBudgets;
     includeReasoningContent?: boolean;
     includeReasoningHistory?: boolean;
     paramDefinitions?: Partial<SettingDefinition>[];
