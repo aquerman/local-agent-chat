@@ -38,6 +38,10 @@ from a phone over Tailscale.
   and `WEBSEARCH_BROWSER_PATH` in the server's `env` block change that.
 - **Search past chats.** LibreChat's sidebar search, backed by a local Meilisearch that
   `scripts\start-all.bat` starts from `bin\meilisearch.exe` (optional, see below).
+- **Retrieval for big files (optional).** LibreChat's RAG API with local embeddings: a file
+  uploaded for File Search is split into chunks and each question pulls in only the matching
+  ones, instead of the whole file filling the context. No Docker: one conda environment holds
+  Python, PostgreSQL and pgvector (see below).
 - **Starter skills.** Four generic skills in `skill/` (morning brief, weekly review, meeting notes,
   document house style), in Claude's `SKILL.md` format. Turn on "Skills" in the tools menu and the
   model sees only their names and one-line descriptions, loading a skill's full instructions when it
@@ -76,6 +80,27 @@ Open <http://localhost:3080>. After pulling frontend changes, run `npm run build
    indexes your existing chats on start. Type in the sidebar search box to find them.
 
 Without the exe, or with `SEARCH=false`, the launcher skips Meilisearch and search stays off.
+
+### Retrieval over big files (optional)
+
+What you install: [Miniforge](https://conda-forge.org/download/) (`winget install CondaForge.Miniforge3`)
+and git. Everything else lands in `..\rag_api` and `%LOCALAPPDATA%\bennychat\rag`, without admin rights.
+
+1. Pull [local-llm](https://github.com/aquerman/local-llm): it has `scripts\start-embeddings.ps1`,
+   which downloads a small embedding model (nomic-embed-text v1.5, ~150 MB) on first start.
+2. In `.env`, uncomment the "BennyChat, fully local" block in the RAG section (copy it from
+   `.env.example` if your `.env` is older). Make sure `JWT_SECRET` is set.
+3. Run `powershell -ExecutionPolicy Bypass -File scripts\setup-rag.ps1` once. It downloads the
+   RAG API, creates a conda environment with Python 3.12, PostgreSQL 16 and pgvector, installs the
+   Python packages and creates the database. Running it again only redoes missing steps.
+4. In `librechat.yaml` (or `bennychat.yaml`), uncomment `legacyFileUploadUX: true` under
+   `fileConfig.endpoints.custom`.
+5. Run `scripts\start-all.bat`. It adds an "Embeddings" tab and a "RAG API" tab.
+
+In a chat, turn on **File Search** in the tools menu, then attach with **Upload for File Search**.
+Use **Upload as Text** for files the model should read in full, and **Upload to Provider** only for
+images (llama-server cannot read PDF bytes). Agents with File Search use the same setup for their
+knowledge files.
 
 ### Wiring up the model
 

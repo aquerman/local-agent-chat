@@ -58,6 +58,13 @@ fileConfig:
       defaultLLMDeliveryPath:
         overrides:
           application/pdf: text
+      # R9 Knowledge and RAG (off until the RAG stack is installed, see CLAUDE.md "Knowledge and
+      # RAG"). Uncommented, the attach button opens a chooser: Upload to Provider (images only
+      # here: a PDF sent that way is refused by llama-server), Upload as Text, and Upload for File
+      # Search once File Search is on in the tools menu. File Search embeds the file through the
+      # local RAG API and each turn gets only the chunks matching the question, not the whole file.
+      # Agents with File Search use the RAG API as soon as RAG_API_URL is set, without this line.
+      # legacyFileUploadUX: true
 
 mcpServers:
   # Web search (packages/websearch): DuckDuckGo search + page fetch, attached to every chat.
