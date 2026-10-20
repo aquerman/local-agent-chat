@@ -33,6 +33,8 @@ from a phone over Tailscale.
 - **Web search.** A small built-in MCP server (`packages/websearch`) gives the model `search`
   (DuckDuckGo, no API key) and `fetch` (a web page as readable text). With `alwaysOn: true` on the
   server in `librechat.yaml` it is attached to every chat, so there is nothing to switch on.
+- **Search past chats.** LibreChat's sidebar search, backed by a local Meilisearch that
+  `scripts\start-all.bat` starts from `bin\meilisearch.exe` (optional, see below).
 
 ## Running it (Windows)
 
@@ -51,6 +53,18 @@ for llama-server and a tab for BennyChat, and skips whichever is already running
 `scripts\start-chat.bat` starts only BennyChat.
 
 Open <http://localhost:3080>. After pulling frontend changes, run `npm run build` again and restart.
+
+### Searching past chats (optional)
+
+1. Download Meilisearch v1.35.1 for Windows (release asset `meilisearch-windows-amd64.exe`) into
+   `bin\meilisearch.exe`:
+   `mkdir bin`, then `gh release download v1.35.1 --repo meilisearch/meilisearch -p meilisearch-windows-amd64.exe -O bin\meilisearch.exe`
+2. Make a key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+3. In `.env` set `SEARCH=true`, `MEILI_HOST=http://127.0.0.1:7700` and `MEILI_MASTER_KEY=<the key>`.
+4. Run `scripts\start-all.bat`. It adds a Meilisearch tab (data in `meili_data\`), and BennyChat
+   indexes your existing chats on start. Type in the sidebar search box to find them.
+
+Without the exe, or with `SEARCH=false`, the launcher skips Meilisearch and search stays off.
 
 ### Wiring up the model
 

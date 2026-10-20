@@ -59,7 +59,8 @@ syncs conflict only here.
 
 - MongoDB is a Windows service, so only two processes need starting: llama-server (local-llm) and
   the LibreChat backend (this repo). `scripts\start-all.bat` starts both in one Windows Terminal
-  window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. The
+  window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. With chat
+  search on it adds a Meilisearch tab (port 7700, see "Chat search"). The
   Desktop `Start All`, `Start Chat` and `Start Server` entries are shortcuts (`.lnk`) to the repo
   files, so editing a script here is enough.
 - `scripts\start-chat.bat` starts only LibreChat (`npm run backend`, which serves the built client).
@@ -123,6 +124,27 @@ syncs conflict only here.
   model called `search` with a sensible query and answered from the results. It did not chain to
   `fetch` unprompted in that exchange; `fetch` itself is verified over stdio. With a 1 ms timeout
   both tools return their `isError` text instead of throwing.
+
+## Chat search
+
+- Upstream's conversation search (sidebar search box, `/search` results page; Claude Desktop's sidebar
+  chat search) backed by Meilisearch, switched on in `.env` only: `SEARCH=true`,
+  `MEILI_HOST=http://127.0.0.1:7700` (not upstream's `0.0.0.0`, which a Windows client cannot dial),
+  `MEILI_MASTER_KEY=<64 hex chars>`. Generate the key with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`; it never goes in git.
+- Binary: Meilisearch **v1.35.1** (the version upstream's `docker-compose.yml` pins), release asset
+  `meilisearch-windows-amd64.exe`, saved as `bin\meilisearch.exe` (`/bin/` is git-ignored):
+  `mkdir bin`, then `gh release download v1.35.1 --repo meilisearch/meilisearch -p meilisearch-windows-amd64.exe -O bin\meilisearch.exe`.
+- `scripts\start-meili.bat` runs it on `127.0.0.1:7700` with data in `meili_data\` (git-ignored),
+  reading the key from `.env` so it never appears on a command line. `start-all.bat` opens it as a
+  "Meilisearch" tab before LibreChat, only when `.env` has `SEARCH=true` and the exe exists, and
+  skips it when 7700 already listens. Without the exe it prints a note and starts the rest as before.
+- On first start with search on, the backend indexes all existing conversations and messages
+  (`indexSync` in `packages/data-schemas/src/models/plugins/mongoMeili.ts`); new messages are
+  indexed as they are saved. Deleting `meili_data\` and restarting rebuilds the index from MongoDB.
+- Verified 2026-10-20 in a Linux rig with the `getmeili/meilisearch:v1.35.1` image (not the
+  Windows exe): pre-existing chats were indexed at startup, the sidebar search returned them by a
+  word from a reply, and a newly sent message was found too.
 
 ## Keyboard shortcuts
 
