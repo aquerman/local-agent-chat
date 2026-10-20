@@ -56,6 +56,9 @@ from a phone over Tailscale.
   under Customize > Memories.
 - **Routines.** LibreChat's scheduled chats are switched on: an agent runs a prompt on a schedule
   and files the result as a chat. See [Routines](#routines-scheduled-chats).
+- **Voice.** Dictate with the mic button and have replies read aloud, in Dutch or English, through
+  two local servers on the CPU (whisper.cpp and Piper), so the GPU stays with the model. Optional:
+  see [docs/voice.md](docs/voice.md) for the install; `scripts\start-all.bat` starts them when present.
 
 ## Running it (Windows)
 

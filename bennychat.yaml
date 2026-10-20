@@ -134,3 +134,48 @@ memory:
       Save only what the user said about themselves, not facts about the world, small talk, or
       one-off requests. Never save passwords, secrets or health details unless asked to.
       If nothing new is worth keeping, do not call any tool and reply with the single word: none.
+
+# Roadmap 11, voice: dictation (STT) and read-aloud (TTS) through local servers on the CPU, so the
+# GPU stays with the LLM. Setup and launcher: docs/voice.md. Ports must match VOICE_STT_PORT /
+# VOICE_TTS_PORT in .env (defaults 8082 / 8083), which scripts\start-all.bat uses.
+speech:
+  stt:
+    # whisper.cpp's whisper-server, started with --inference-path /v1/audio/transcriptions and
+    # --convert (ffmpeg turns the browser's webm/ogg/mp4 recording into WAV). `model` is ignored.
+    openai:
+      url: 'http://127.0.0.1:8082/v1/audio/transcriptions'
+      apiKey: 'local' # ignored by the server, but the schema requires one
+      model: 'whisper-1'
+    # The speech SSRF guard blocks loopback unless the host:port is listed here.
+    allowedAddresses:
+      - '127.0.0.1:8082'
+  tts:
+    # packages/piper: an OpenAI /v1/audio/speech server in front of Piper (mp3 via ffmpeg).
+    # `auto` reads Dutch text with the installed nl_* voice and English with the en_* voice.
+    # Named voices must be installed in bin\piper\voices; an unknown name falls back to `auto`.
+    openai:
+      url: 'http://127.0.0.1:8083/v1/audio/speech'
+      apiKey: 'local'
+      model: 'piper'
+      voices: ['auto', 'nl_NL-mls-medium', 'en_US-lessac-medium']
+    allowedAddresses:
+      - '127.0.0.1:8083'
+  # Defaults for Settings > Speech, applied until a user changes them (then localStorage wins).
+  # Mirrors Claude's dictation: click the mic, speak, click it again; the text lands in the composer
+  # and you press send yourself (no 3 s silence auto-stop, no auto-send). Replies are read aloud
+  # only from a message's speaker button, never automatically.
+  speechTab:
+    conversationMode: false
+    advancedMode: false
+    speechToText:
+      engineSTT: 'external'
+      languageSTT: '' # empty = whisper detects Dutch or English per recording
+      autoTranscribeAudio: false
+      decibelValue: -45
+      autoSendText: -1
+    textToSpeech:
+      engineTTS: 'external'
+      voice: 'auto'
+      automaticPlayback: false
+      playbackRate: 1
+      cacheTTS: true
