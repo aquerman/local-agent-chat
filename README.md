@@ -36,6 +36,10 @@ from a phone over Tailscale.
   Pages that only fill in with JavaScript are read again in a headless copy of the Microsoft Edge
   already installed on Windows (no browser download); `WEBSEARCH_RENDER` (`auto`, `always`, `off`)
   and `WEBSEARCH_BROWSER_PATH` in the server's `env` block change that.
+- **Folder access.** The reference filesystem MCP server, scoped to folders you list in `.env`
+  (`BENNY_FOLDERS`). The model can list, search and read files there freely; writing, editing,
+  creating folders and moving files ask you first. Benny has it built in; plain model chats switch
+  it on with "Folders" in the MCP menu of the input bar (see below).
 - **Search past chats.** LibreChat's sidebar search, backed by a local Meilisearch that
   `scripts\start-all.bat` starts from `bin\meilisearch.exe` (optional, see below).
 - **Retrieval for big files (optional).** LibreChat's RAG API with local embeddings: a file
@@ -125,6 +129,22 @@ In a chat, turn on **File Search** in the tools menu, then attach with **Upload 
 Use **Upload as Text** for files the model should read in full, and **Upload to Provider** only for
 images (llama-server cannot read PDF bytes). Agents with File Search use the same setup for their
 knowledge files.
+
+### Folder access (optional)
+
+1. In `.env`, list the folders the model may use, separated by `;`, for example
+   `BENNY_FOLDERS=%USERPROFILE%\Documents\Assistant;%USERPROFILE%\Documents\Notes`.
+   Without it, BennyChat uses `Documents\Assistant` in your user folder and creates it.
+2. Restart BennyChat. Benny, the default assistant, has the folder tools already (if Benny was
+   created before this feature, run `npm run seed-benny -- --reset` once). In a plain model chat,
+   open the MCP menu in the input bar and tick **Folders**.
+3. Ask, for example, "What files are in my Assistant folder?" or "Summarise notes.md". Files
+   outside the listed folders are refused. When the model wants to write, edit, create a folder or
+   move a file, the chat shows an Approve / Reject prompt first.
+
+The server ships with BennyChat (`npm ci` installs it), so nothing is downloaded when it starts.
+Small models do best with targeted requests: name the file, or ask for the first or last lines
+of a long one.
 
 ### Wiring up the model
 
