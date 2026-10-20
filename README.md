@@ -54,6 +54,8 @@ from a phone over Tailscale.
   preferences, your current projects and any standing instructions. It keeps them in a short memory
   (1.5k tokens) that every new chat sees. You can view, edit or delete entries, or switch memory off,
   under Customize > Memories.
+- **Routines.** LibreChat's scheduled chats are switched on: an agent runs a prompt on a schedule
+  and files the result as a chat. See [Routines](#routines-scheduled-chats).
 
 ## Running it (Windows)
 
@@ -126,6 +128,44 @@ endpoints:
 
 Tool calling (web search, agents) needs `llama-server --jinja` and a model whose chat template
 supports tools. The validated models are listed in local-llm's `CLAUDE.md`.
+
+## Routines (scheduled chats)
+
+BennyChat switches on LibreChat's scheduled chats: an agent runs a short prompt on a schedule
+(daily, weekdays, weekly, hourly or a cron expression) and each run lands as a new chat you can open
+later. Find them under **Customize → Scheduled chats**; each card has an on/off switch and a "…"
+menu with **Run now**.
+
+1. Add `SCHEDULES_SINGLE_PROCESS=true` to `.env` (BennyChat runs as one process without Redis) and
+   restart. Without it schedules cannot be created.
+2. Create an agent on the `local-llm` model in Agent Builder (or use the default Benny agent). For
+   routines, set its reasoning effort to Off or leave it unset (runs as Low), and keep the prompt short.
+3. Scheduled chats → New schedule: pick the agent, the prompt and the time. Runs must be at least
+   60 minutes apart, scheduled runs go one at a time, and five failures in a row pause a schedule.
+
+Routines share the GPU with your chats: while one runs, a chat waits for it (and the other way
+round) unless local-llm starts llama-server with a second slot (`--parallel 2`).
+
+### Keeping the PC awake for routines
+
+A routine only runs if the PC is awake and BennyChat and llama-server are running at that time. A
+run that is more than 15 minutes late (the PC was asleep) is skipped, not caught up. Pick one:
+
+- **Awake hours (simplest).** Don't let the PC sleep while routines are due: Settings → System →
+  Power → "Make my device sleep after" → Never (when plugged in), or keep it awake only for a time
+  window with PowerToys Awake.
+- **Wake timer.** Let Windows sleep and wake it a few minutes before the routine:
+  1. Allow wake timers: Control Panel → Power Options → Change plan settings → Change advanced power
+     settings → Sleep → Allow wake timers → Enable.
+  2. Task Scheduler → Create Task: trigger daily, about 5 minutes before the routine; action
+     `cmd.exe /c exit`; Conditions tab → tick **Wake the computer to run this task**.
+  3. Check it with `powercfg /waketimers` (lists the pending timer) and, the next morning,
+     `powercfg /lastwake`.
+
+  A timer-woken PC with no keyboard or mouse input falls back to sleep after a few minutes (Windows'
+  "System unattended sleep timeout", hidden in Power Options by default), which may cut a slow run
+  short. If that happens, use awake hours instead. Wake timers do not start a PC that is shut down,
+  and on laptops with Modern Standby they may be ignored on battery.
 
 ## For contributors
 
