@@ -27,7 +27,7 @@ const CREATE_DESCRIPTION =
 
 const APPEND_DESCRIPTION =
   'Add the next section (Markdown) or more slides to a file made by create_document, and attach the updated file. ' +
-  'Use it to write a long document one section at a time.';
+  'Only for long documents written one section at a time; a short document needs a single create_document call.';
 
 const slidesParam = z
   .array(slideSchema)
@@ -106,7 +106,7 @@ export function createServer(options: ServerOptions): McpServer {
     const summary = [
       `${action} "${doc.filename}" (${LABELS[doc.format]}, ${extent}, ${kilobytes(file.byteLength)}).`,
       'It is attached to the chat for the user to download; do not repeat its content in your reply.',
-      `document_id: ${doc.id} (pass it to append_section to add more).`,
+      `document_id: ${doc.id} (only needed to append a further section of a long document).`,
       `Saved at: ${savedTo}`,
     ].join('\n');
     return {
