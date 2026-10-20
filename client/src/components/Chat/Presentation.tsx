@@ -1,10 +1,17 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useRecoilValue } from 'recoil';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
+import { useRecoilValue, useResetRecoilState, useSetRecoilState } from 'recoil';
 import { EModelEndpoint, FileSources, LocalStorageKeys } from 'librechat-data-provider';
+import type { TFile } from 'librechat-data-provider';
+import type {
+  FilePanelContextValue,
+  FilePanelFile,
+  FilePanelKind,
+} from '~/components/Chat/FilePanel';
 import type { ExtendedFile } from '~/common';
 import useResetArtifactsOnConversationChange from '~/hooks/Artifacts/useResetArtifactsOnConversationChange';
 import { ParentSubagentsProvider } from '~/components/Chat/Subagents/ParentSubagentsProvider';
+import { FilePanel, FilePanelContext, getFilePanelKind } from '~/components/Chat/FilePanel';
 import DragDropWrapper from '~/components/Chat/Input/Files/DragDropWrapper';
 import { activeSubagentPanel } from '~/components/Chat/Subagents/state';
 import { EditorProvider, ArtifactsProvider } from '~/Providers';
@@ -37,6 +44,12 @@ export default function Presentation({ children }: { children: React.ReactNode }
   const setSelectedSubagent = useSetAtom(activeSubagentPanel);
   const resetSelectedSubagent = useCallback(() => setSelectedSubagent(null), [setSelectedSubagent]);
   const previousConversationIdRef = useRef<string | null>(null);
+  const resetCurrentArtifactId = useResetRecoilState(store.currentArtifactId);
+  const setArtifactsVisibility = useSetRecoilState(store.artifactsVisibility);
+  const [panelFile, setPanelFile] = useState<{ file: FilePanelFile; kind: FilePanelKind } | null>(
+    null,
+  );
+  const closeFilePanel = useCallback(() => setPanelFile(null), []);
 
   useResetArtifactsOnConversationChange();
 
@@ -44,8 +57,28 @@ export default function Presentation({ children }: { children: React.ReactNode }
     const previous = previousConversationIdRef.current;
     const next = conversationId ?? null;
     previousConversationIdRef.current = next;
-    if (previous != null && previous !== next) resetSelectedSubagent();
-  }, [conversationId, resetSelectedSubagent]);
+    if (previous != null && previous !== next) {
+      resetSelectedSubagent();
+      closeFilePanel();
+    }
+  }, [closeFilePanel, conversationId, resetSelectedSubagent]);
+
+  const openFile = useCallback(
+    (file: Partial<TFile>) => {
+      const kind = getFilePanelKind(file);
+      if (kind == null || file.file_id == null) {
+        return false;
+      }
+      resetCurrentArtifactId();
+      setArtifactsVisibility(false);
+      resetSelectedSubagent();
+      setPanelFile({ file: { ...file, file_id: file.file_id }, kind });
+      return true;
+    },
+    [resetCurrentArtifactId, resetSelectedSubagent, setArtifactsVisibility],
+  );
+
+  const filePanelContext = useMemo<FilePanelContextValue>(() => ({ openFile }), [openFile]);
 
   const setFilesToDelete = useSetFilesToDelete();
 
@@ -123,6 +156,25 @@ export default function Presentation({ children }: { children: React.ReactNode }
     if (artifactsElement != null && selectedSubagent != null) resetSelectedSubagent();
   }, [artifactsElement, resetSelectedSubagent, selectedSubagent]);
 
+  /** Opening an artifact or a child thread replaces the document; the panel shows one thing at a time. */
+  useEffect(() => {
+    if (artifactsElement != null || selectedSubagent != null) closeFilePanel();
+  }, [artifactsElement, closeFilePanel, selectedSubagent]);
+
+  const filePanelElement = useMemo(() => {
+    if (panelFile == null) {
+      return null;
+    }
+    return (
+      <FilePanel
+        key={panelFile.file.file_id}
+        file={panelFile.file}
+        kind={panelFile.kind}
+        onClose={closeFilePanel}
+      />
+    );
+  }, [closeFilePanel, panelFile]);
+
   const subagentElement = useMemo(() => {
     if (
       selectedSubagent == null ||
@@ -138,7 +190,7 @@ export default function Presentation({ children }: { children: React.ReactNode }
     );
   }, [conversationId, selectedSubagent]);
 
-  const panelElement = artifactsElement ?? subagentElement;
+  const panelElement = artifactsElement ?? filePanelElement ?? subagentElement;
 
   return (
     <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-presentation">
@@ -148,11 +200,13 @@ export default function Presentation({ children }: { children: React.ReactNode }
           enabled={conversationEndpoint === EModelEndpoint.agents && conversationAgentId != null}
           isSubmitting={isSubmitting}
         >
-          <SidePanelGroup panel={panelElement}>
-            <main className="flex h-full flex-col overflow-y-auto" role="main">
-              {children}
-            </main>
-          </SidePanelGroup>
+          <FilePanelContext.Provider value={filePanelContext}>
+            <SidePanelGroup panel={panelElement}>
+              <main className="flex h-full flex-col overflow-y-auto" role="main">
+                {children}
+              </main>
+            </SidePanelGroup>
+          </FilePanelContext.Provider>
         </ParentSubagentsProvider>
       </AppChatSurface>
     </DragDropWrapper>

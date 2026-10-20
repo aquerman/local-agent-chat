@@ -2893,6 +2893,7 @@
   "com_ui_versions": "Versions",
   "com_ui_via_server": "in {{0}}",
   "com_ui_view_memory": "View Memory",
+  "com_ui_view_extracted_text": "View extracted text",
   "com_ui_wakeup_explainer": "This durable result woke the agent to continue the conversation.",
   "com_ui_wakeup_subagent_cancelled": "Subagent task cancelled",
   "com_ui_wakeup_subagent_completed": "Subagent task completed",
