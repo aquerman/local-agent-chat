@@ -120,7 +120,8 @@ syncs conflict only here.
   panels, the account row) instead of the icon rail; the model selector sits next to Send; header
   actions live in the "…" menu at every width; the welcome-screen disclaimer is hidden; reply actions
   appear on hover, the latest reply included. Conversation rows drop their endpoint icon.
-- Read it in the client with `useMinimalLayout()`. The mobile drawer is unchanged.
+- Read it in the client with `useMinimalLayout()`. On a phone the drawer keeps its stock structure but its
+  text is one size larger (`MINIMAL_DRAWER_TEXT` in `client/src/components/UnifiedSidebar/constants.ts`).
 
 ## Fork workflow (overrides upstream "Branching and Pull Requests")
 

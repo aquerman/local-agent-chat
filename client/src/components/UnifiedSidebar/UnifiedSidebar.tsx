@@ -14,13 +14,14 @@ import {
   MOBILE_DRAWER_ID,
   MOBILE_DRAWER_WIDTH,
   DRAWER_UNPAINTED,
+  MINIMAL_DRAWER_TEXT,
 } from './constants';
 import { ChatContext, ChatFormProvider, ActivePanelProvider } from '~/Providers';
 import { MobileHeader, MobileBottomBar, MobileShortcutTargets } from './mobile';
 import useUnifiedSidebarLinks from '~/hooks/Nav/useUnifiedSidebarLinks';
 import useSidebarToggle from '~/hooks/Nav/useSidebarToggle';
 import useSidebarState from '~/hooks/Nav/useSidebarState';
-import { useChatHelpers, useLocalize } from '~/hooks';
+import { useChatHelpers, useMinimalLayout, useLocalize } from '~/hooks';
 import SidePanelNav from '~/components/SidePanel/Nav';
 import Sidebar from './Sidebar';
 import { cn } from '~/utils';
@@ -51,6 +52,7 @@ function UnifiedSidebar({ isSliding = false }: { isSliding?: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { isSmallScreen, expanded } = useSidebarState();
+  const minimalLayout = useMinimalLayout();
   const { setSidebarOpen } = useSidebarToggle();
   const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const [sidebarWidth, setSidebarWidth] = useState(getInitialWidth);
@@ -193,6 +195,7 @@ function UnifiedSidebar({ isSliding = false }: { isSliding?: boolean }) {
            * horizontal scrollers), while pinch-zoom stays with the browser —
            * this full-viewport surface must not disable zooming entirely. */
           'fixed inset-y-0 left-0 flex touch-pan-y touch-pinch-zoom flex-col bg-surface-primary-alt',
+          minimalLayout && MINIMAL_DRAWER_TEXT,
           expanded ? 'translate-x-0' : '-translate-x-full',
         )}
         style={{
