@@ -1641,7 +1641,10 @@ Please follow these instructions when using tools from the respective MCP server
           await this.updateUserLastActivity(userId);
         }
         this.checkIdleConnections();
-        return formatToolContent(result as t.MCPToolCallResponse, provider);
+        return formatToolContent(result as t.MCPToolCallResponse, provider, {
+          serverName,
+          fileOutputs: declaredConfig.fileOutputs === true,
+        });
       } catch (error) {
         if (error instanceof OAuthRecoveryTakeoverRequired) {
           recoveryTakeoverConsumed = true;

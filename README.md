@@ -66,6 +66,11 @@ from a phone over Tailscale.
 - **Approvals and questions.** Like Claude Desktop, read-only tools run on their own and anything
   that writes, sends or deletes asks first: Approve (once), "Always allow in this chat", Reject or
   Edit. The model can also stop and ask you a multiple-choice question.
+- **Word, PDF and PowerPoint files.** Another built-in MCP server (`packages/documents`) lets the
+  model create `.docx`, `.pdf` and `.pptx` files from Markdown or a slide outline, in one clean
+  house style, and add to them section by section for long documents. The file arrives in the chat
+  as an attachment to download (Word and PowerPoint files also get a preview card). PDFs are
+  printed with the Microsoft Edge that Windows already has; nothing extra to install.
 
 ## Running it (Windows)
 

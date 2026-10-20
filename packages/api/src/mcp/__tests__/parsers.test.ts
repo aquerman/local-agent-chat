@@ -867,4 +867,70 @@ describe('formatToolContent', () => {
       );
     });
   });
+
+  describe('file outputs (fileOutputs: true)', () => {
+    const pdf = Buffer.from('%PDF-1.4\n\u0000binary', 'latin1').toString('base64');
+    const docResult = (
+      resource: Partial<{ uri: string; mimeType: string; blob: string; text: string }>,
+    ): t.MCPToolCallResponse => ({
+      content: [
+        { type: 'text', text: 'Created the report.' },
+        {
+          type: 'resource',
+          resource: {
+            uri: 'documents://abc/Q3%20report.pdf',
+            mimeType: 'application/pdf',
+            ...resource,
+          } as never,
+        },
+      ],
+    });
+
+    it('turns a blob resource into a file artifact and tells the model it is attached', () => {
+      const [content, artifacts] = formatToolContent(docResult({ blob: pdf }), 'openai', {
+        serverName: 'documents',
+        fileOutputs: true,
+      });
+
+      expect(content).toBe(
+        'Created the report.\n\nFile attached to the chat for the user: Q3_report.pdf (application/pdf, 1 KB)',
+      );
+      expect(content).not.toContain(pdf);
+      expect(artifacts?.mcp_files).toEqual([
+        {
+          serverName: 'documents',
+          uri: 'documents://abc/Q3%20report.pdf',
+          filename: 'Q3_report.pdf',
+          mimeType: 'application/pdf',
+          data: pdf,
+          bytes: 16,
+        },
+      ]);
+    });
+
+    it('keeps the default summary when the server has not opted in', () => {
+      const [content, artifacts] = formatToolContent(docResult({ blob: pdf }), 'openai', {
+        serverName: 'documents',
+      });
+
+      expect(content).toContain('bytes of binary data (omitted; not UTF-8 text)');
+      expect(artifacts).toBeUndefined();
+    });
+
+    it('leaves image blobs and text resources on their existing paths', () => {
+      const image = formatToolContent(
+        docResult({ blob: 'aGVsbG8=', mimeType: 'image/png', uri: 'documents://abc/a.png' }),
+        'openai',
+        { fileOutputs: true },
+      );
+      expect(image[1]?.mcp_files).toBeUndefined();
+      expect(image[1]?.content).toHaveLength(1);
+
+      const text = formatToolContent(docResult({ text: 'plain body' }), 'openai', {
+        fileOutputs: true,
+      });
+      expect(text[0]).toContain('Resource Text: plain body');
+      expect(text[1]).toBeUndefined();
+    });
+  });
 });
