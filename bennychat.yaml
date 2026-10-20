@@ -56,12 +56,63 @@ endpoints:
           medium: 2048
           high: 6144
 
-  # Roadmap 10 (skills): the model sees only a catalog of names + one-line descriptions and loads
-  # a skill's body with the `skill` tool when it needs it. Cap the catalog so a 9B model's prompt
-  # stays small (~40 tokens per skill). `skills` must stay in agents.capabilities (upstream default).
+  # --- F3: Agents endpoint on the local model -------------------------------------------------
+  # Chats run through LibreChat's Agents endpoint with a default "Benny" agent (seeded by
+  # `npm run seed-benny`, see the modelSpecs entry below). Sized for Qwen3.5-9B on one GPU slot.
   agents:
+    # A graph step is one model call or one tool round. 20 allows about 8-9 tool calls per turn,
+    # enough for search -> fetch -> answer chains without letting a looping 9B model spin long.
+    recursionLimit: 20
+    maxRecursionLimit: 50
+    # No hosted Code API (execute_code), no keyed web_search (the websearch MCP covers it) and no
+    # OCR service yet, so those three stay off. Everything else is upstream's default set.
+    capabilities:
+      - deferred_tools
+      - file_search
+      - artifacts
+      - subagents
+      - actions
+      - context
+      - skills
+      - memory
+      - ask_user_question
+      - tools
+      - chain
+    # Roadmap 10 (skills): the model sees only a catalog of names + one-line descriptions and loads
+    # a skill's body with the `skill` tool when it needs it. Cap the catalog so a 9B model's prompt
+    # stays small (~40 tokens per skill). `skills` must stay in capabilities above.
     skills:
       maxCatalogSkills: 12
+    # --- 13: Approvals and ask-the-user ----------------------------------------------------------
+    # Claude Desktop's default: read-only tools run without asking, anything that writes, sends
+    # or deletes asks first, with Approve (once), "Always allow in this chat", Reject or Edit.
+    # `mode: default` means every tool no `allow` pattern matches asks, so a new connector's write
+    # tools are gated with no extra config. Do not list write tools under `ask`: an `ask` match
+    # also overrides "Always allow in this chat". MCP tools are named `<tool>_mcp_<server>`.
+    # The ask_user_question tool (agent capability above) never needs approval.
+    toolApproval:
+      enabled: true
+      mode: default
+      allow:
+        - 'file_search'
+        - 'tool_search'
+        - 'skill'
+        - 'read_file'
+        - 'subagent'
+        - 'search*_mcp_*'
+        - 'fetch*_mcp_*'
+        - 'get*_mcp_*'
+        - 'list*_mcp_*'
+        - 'read*_mcp_*'
+        - 'find*_mcp_*'
+        - 'view*_mcp_*'
+        - 'query*_mcp_*'
+        - 'describe*_mcp_*'
+      reason: 'Benny wants to run {tool}. It can change data outside this chat.'
+    # Paused runs (approval or Ask User) wait up to a day in MongoDB, then expire.
+    checkpointer:
+      type: mongo
+      ttl: 86400
 
 fileConfig:
   endpoints:
@@ -179,3 +230,27 @@ speech:
       automaticPlayback: false
       playbackRate: 1
       cacheTTS: true
+
+# --- F3: context summarization -----------------------------------------------------------------
+# When a conversation outgrows the agent's context budget (32k by default for model `local`,
+# matching the roadmap's "typical turn in 32k"), older turns are summarized by the same local
+# model instead of being dropped. No provider/model here = the agent's own (Benner / local).
+summarization:
+  enabled: true
+  maxSummaryTokens: 1024
+  retainRecent:
+    turns: 2
+
+# --- F3: default model spec --------------------------------------------------------------------
+# New chats open on the Benny agent. The plain `Benner` endpoint stays in the model selector.
+# The agent is a database record: create it once with `npm run seed-benny` (idempotent).
+modelSpecs:
+  list:
+    - name: 'benny'
+      label: 'Benny'
+      description: 'Local assistant with web search, approvals and questions'
+      default: true
+      preset:
+        endpoint: 'agents'
+        agent_id: 'agent_benny'
+

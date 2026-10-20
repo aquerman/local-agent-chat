@@ -332,6 +332,29 @@ syncs conflict only here.
   CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
   `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
 
+## Agents, Benny and approvals (roadmap F3, 13)
+
+- Chats run through the Agents endpoint. `bennychat.yaml` sets `endpoints.agents` (no
+  `execute_code`/`web_search`/`ocr` capabilities: no Code API, search keys or OCR here;
+  `recursionLimit: 20`), top-level `summarization` (self-summarizes on the agent's own model past the
+  32k default budget for model `local`) and a default model spec `benny` → `agent_id: agent_benny`.
+- Agents are DB records, so `npm run seed-benny -- [email] [--reset]` (`config/seed-benny.js`) creates
+  `agent_benny` (provider `Benner`, model `local`, websearch MCP + `ask_user_question`, artifacts off
+  to save ~2.5k prompt tokens), owned by the given or oldest user and public-viewable. Idempotent;
+  `--reset` restores the defaults. `alwaysOn` MCP servers do not attach to saved agents: Benny lists
+  `websearch` itself.
+- Thinking pill on agents: the pill follows the agent's provider (`ThinkingModeMenu`), the agents
+  compact schema keeps `reasoning_effort`, and `selectRequestModelParameters`
+  (`packages/api/src/agents/thinking.ts`) forwards it only to agents on a `llama_cpp_budget` endpoint.
+- `ask_user_question` string caps are 1000: llama-server refuses tool grammars with a repetition of
+  2000+ ("failed to parse grammar"), which broke every request carrying the tool.
+- `toolApproval` (`mode: default`): `allow` lists read-only names/patterns (`search*_mcp_*`,
+  `get*_mcp_*`, `list*_mcp_*`...); every other tool asks. MCP tool names are `<tool>_mcp_<server>`.
+  "Always allow in this chat" sends `scope: 'session'`; the resume route stores the paused tool's
+  name on the conversation (`approvedTools`, `select: false`, data-schemas `toolApprovals.ts`) and
+  `createRun` appends it to `allow` (`resolveToolApprovalPolicy` `session` layer). `ask`/`deny`
+  patterns still win over it, so do not put write tools in `ask` if they should be rememberable.
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

@@ -2091,6 +2091,7 @@ export async function createRun({
   discoveredToolNames,
   requestBody,
   codeApprovalMode: requestedCodeApprovalMode,
+  sessionApprovedTools,
   user,
   tenantId,
   centralTraceExportEnabled,
@@ -2133,6 +2134,8 @@ export async function createRun({
   streamUsage?: boolean;
   requestBody?: t.RequestBody;
   codeApprovalMode?: CodeApprovalMode;
+  /** Tools the user approved for the rest of this conversation; see `ToolApprovalPolicyLayers`. */
+  sessionApprovedTools?: readonly string[];
   user?: IUser;
   tenantId?: string;
   /**
@@ -2699,6 +2702,7 @@ export async function createRun({
   const toolApprovalPolicy = resolveToolApprovalPolicy({
     endpoint: agentsEndpointConfig?.toolApproval,
     attachedCodeEnvironment: attachedCodeEnvironmentAgentIds.size > 0,
+    session: sessionApprovedTools,
   });
   // Gate HITL to callers that actually implement the pause/resume lifecycle. The
   // OpenAI-compatible + Responses controllers also call createRun/processStream but never
