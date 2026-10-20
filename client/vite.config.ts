@@ -90,6 +90,7 @@ export default defineConfig(({ command }) => ({
       },
     },
     copyPublicAssets(),
+    copyArtifactRuntime(),
     VitePWA({
       injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
@@ -113,6 +114,8 @@ export default defineConfig(({ command }) => ({
           '**/*.map',
           'index.html',
           'sw-heal.js',
+          'artifacts-preview/**/*',
+          'monaco/**/*',
           'assets/rum.*.js',
           'assets/locale-*.js',
           'assets/query-devtools*.js',
@@ -454,6 +457,51 @@ export function sourcemapExclude(opts?: SourcemapExclude): Plugin {
           map: { mappings: '' },
         };
       }
+    },
+  };
+}
+
+/**
+ * Vendors the artifact panel's runtime files from npm into dist so previews and the code tab
+ * work without the internet (fork: see CLAUDE.md "Artifacts offline"):
+ * - `artifacts-preview/`: static-browser-server's relay and service worker, the files
+ *   Sandpack's `static` template loads from `staticBundlerURL`. Resolved through
+ *   sandpack-client so the relay always matches the client's protocol version.
+ * - `artifacts-preview/__csb_vendor/`: Tailwind's browser build and `marked` (Markdown and code
+ *   previews). The `__csb` prefix makes the preview's service worker pass these requests
+ *   through to the server.
+ * - `monaco/vs`: the AMD build `@monaco-editor/react` otherwise loads from jsDelivr.
+ */
+export function copyArtifactRuntime(): Plugin {
+  const sandpackRequire = createRequire(require.resolve('@codesandbox/sandpack-client'));
+  const previewDir = path.join(
+    path.dirname(sandpackRequire.resolve('static-browser-server/package.json')),
+    'out',
+    'preview',
+  );
+  const vendorFiles: Record<string, string> = {
+    'tailwind.js': require.resolve('@tailwindcss/browser'),
+    'marked.js': require.resolve('marked/marked.min.js'),
+  };
+  const monacoDir = path.dirname(require.resolve('monaco-editor'));
+  let outDir = path.resolve(import.meta.dirname, 'dist');
+  return {
+    name: 'copy-artifact-runtime',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    async writeBundle() {
+      const previewOut = path.join(outDir, 'artifacts-preview');
+      await fs.promises.cp(previewDir, previewOut, { recursive: true });
+      const vendorOut = path.join(previewOut, '__csb_vendor');
+      await fs.promises.mkdir(vendorOut, { recursive: true });
+      await Promise.all(
+        Object.entries(vendorFiles).map(([name, file]) =>
+          fs.promises.copyFile(file, path.join(vendorOut, name)),
+        ),
+      );
+      await fs.promises.cp(monacoDir, path.join(outDir, 'monaco', 'vs'), { recursive: true });
     },
   };
 }

@@ -1,5 +1,6 @@
 import { highContrastDarkTheme, highContrastLightTheme } from '@librechat/client';
 import type { IThemeRGB } from '@librechat/client';
+import type { ArtifactFiles } from '~/common';
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
@@ -251,6 +252,24 @@ function escapeForTemplateLiteral(content: string): string {
 
 const MARKED_CDN = 'https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js';
 const MARKED_SRI = 'sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+';
+/** The same `marked.min.js` (client's pinned `marked` dependency, so `MARKED_SRI` still
+ *  matches), served by LibreChat next to its self-hosted static bundler. The `/__csb` prefix
+ *  makes the preview's service worker pass the request through to the server. */
+export const MARKED_SELF_HOSTED = '/__csb_vendor/marked.js';
+
+/**
+ * Points generated preview documents at the self-hosted `marked` instead of jsDelivr, for
+ * previews served by the self-hosted static bundler (offline use).
+ */
+export function withSelfHostedMarked(files: ArtifactFiles): ArtifactFiles {
+  const entries = Object.entries(files).map(([name, content]) => [
+    name,
+    name.endsWith('.html') && typeof content === 'string'
+      ? content.replaceAll(`src="${MARKED_CDN}"`, `src="${MARKED_SELF_HOSTED}"`)
+      : content,
+  ]);
+  return Object.fromEntries(entries) as ArtifactFiles;
+}
 
 /**
  * Embedded JS copy of `isSafeUrl`. Keep in sync with the exported

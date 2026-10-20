@@ -42,6 +42,10 @@ from a phone over Tailscale.
   document house style), in Claude's `SKILL.md` format. Turn on "Skills" in the tools menu and the
   model sees only their names and one-line descriptions, loading a skill's full instructions when it
   needs one; or type `$` to pick one yourself. Add your own from the Skills panel.
+- **Offline artifacts.** HTML, SVG and Markdown previews, Mermaid diagrams and the code view work
+  without the internet: BennyChat serves the preview bundler, Tailwind and the code editor itself.
+  Set `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env` to switch it on. React
+  previews still load their bundler from codesandbox.io.
 
 ## Running it (Windows)
 

@@ -179,6 +179,34 @@ syncs conflict only here.
   Qwen3.5-9B; if it does the same, rely on `$` or turn off `interface.skills.create` (which also hides
   "Create skill" in the UI).
 
+## Artifacts offline
+
+- Artifacts are switched on per chat (Tools menu → Artifacts; the agents capability `artifacts` is on
+  by default), so `bennychat.yaml` has nothing to enable. Mermaid renders in the app (mermaid npm)
+  and needs no network.
+- The Code tab's Monaco is served from `/monaco/vs` (copied from `monaco-editor` at build time,
+  `client/src/utils/monaco.ts`) instead of jsDelivr. The Vite dev server has no copy and keeps the CDN.
+- HTML, SVG, Markdown, code and office previews use Sandpack's `static` template. Upstream it loads
+  its relay from `*.sandpack-static-server.codesandbox.io`, Tailwind from `cdn.tailwindcss.com` and
+  marked from jsDelivr. With `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env`
+  (port = `PORT`), LibreChat serves the relay itself: `packages/api/src/artifacts/bundler.ts`
+  answers hosts `<hex id>-preview.localhost` and is mounted before the security headers, because
+  the app frames it. Those previews then load Tailwind and marked from `/__csb_vendor/`. The
+  `/__csb` prefix makes the preview's service worker pass the request to the server.
+  `copyArtifactRuntime` in `client/vite.config.ts` copies relay, Tailwind and marked into
+  `client/dist/artifacts-preview/` at build time.
+- `*.localhost` resolves to loopback without DNS in Chromium browsers (Edge, Chrome). A page opened
+  from another host (a phone over Tailscale) ignores a `.localhost` bundler and uses codesandbox's
+  bundler. With `CSP_ENABLED`, add `CSP_FRAME_SRC_EXTRA=http://*.localhost:3080` (untested).
+- Self-hosted previews get Tailwind v4 (`@tailwindcss/browser`, the official browser build), not
+  the v3 Play CDN. Most utility classes are the same, but a `tailwind.config = {...}` script is ignored.
+- React artifacts still need the internet: Sandpack's runtime bundler (`2-19-8-sandpack.codesandbox.io`)
+  fetches npm packages from codesandbox's packager and CDNs, and none of that is on npm to vendor.
+  Keep `SANDPACK_BUNDLER_URL` unset.
+- Verified 2026-10-20 in the cloud test rig (Chromium; every non-localhost request aborted and
+  unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid and the Code tab rendered with
+  zero external requests. React stopped at the bundler.
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

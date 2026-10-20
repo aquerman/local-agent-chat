@@ -6,7 +6,8 @@ import type {
 } from '@codesandbox/sandpack-react/unstyled';
 import type { SandpackStartupConfig } from '~/utils/artifacts';
 import type { ArtifactFiles } from '~/common';
-import { sharedFiles, buildSandpackOptions } from '~/utils/artifacts';
+import { sharedFiles, buildSandpackOptions, isSelfHostedPreview } from '~/utils/artifacts';
+import { withSelfHostedMarked } from '~/utils/markdown';
 
 export const ArtifactPreview = memo(function ({
   files,
@@ -25,19 +26,22 @@ export const ArtifactPreview = memo(function ({
   currentCode?: string;
   startupConfig?: SandpackStartupConfig;
 }) {
+  const selfHosted = isSelfHostedPreview(template, startupConfig);
+
   const artifactFiles = useMemo(() => {
     if (Object.keys(files).length === 0) {
       return files;
     }
+    const localFiles = selfHosted ? withSelfHostedMarked(files) : files;
     const code = currentCode ?? '';
     if (!code) {
-      return files;
+      return localFiles;
     }
     return {
-      ...files,
+      ...localFiles,
       [fileKey]: { code },
     };
-  }, [currentCode, files, fileKey]);
+  }, [currentCode, files, fileKey, selfHosted]);
 
   const options: SandpackProviderProps['options'] = useMemo(
     () => buildSandpackOptions(template, startupConfig),

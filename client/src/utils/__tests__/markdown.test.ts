@@ -1,4 +1,12 @@
-import { isSafeUrl, getMarkdownFiles, EMBEDDED_IS_SAFE_URL } from '../markdown';
+import fs from 'fs';
+import { createHash } from 'crypto';
+import {
+  isSafeUrl,
+  getMarkdownFiles,
+  MARKED_SELF_HOSTED,
+  withSelfHostedMarked,
+  EMBEDDED_IS_SAFE_URL,
+} from '../markdown';
 
 describe('isSafeUrl', () => {
   it('allows https URLs', () => {
@@ -386,5 +394,32 @@ describe('markdown artifacts', () => {
       expect(html).toContain('# Heading');
       expect(html).toContain('- List item');
     });
+  });
+});
+
+describe('withSelfHostedMarked', () => {
+  const integrityOf = (html: string): string | undefined =>
+    html.match(/<script src="[^"]+" integrity="([^"]+)"/)?.[1];
+
+  it('points the preview document at the self-hosted marked and keeps its integrity check', () => {
+    const files = getMarkdownFiles('# Title');
+    const local = withSelfHostedMarked(files) as Record<string, string>;
+
+    expect(local['content.md']).toBe('# Title');
+    expect(local['index.html']).toContain(`<script src="${MARKED_SELF_HOSTED}" integrity=`);
+    expect(local['index.html']).not.toContain('cdn.jsdelivr.net');
+    expect(integrityOf(local['index.html'])).toBe(integrityOf(files['index.html'] ?? ''));
+  });
+
+  it('leaves non-HTML files untouched', () => {
+    const md = '<script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>';
+    expect(withSelfHostedMarked({ 'content.md': md })).toEqual({ 'content.md': md });
+  });
+
+  it('vendors the exact file the integrity hash names', () => {
+    const integrity = integrityOf(getMarkdownFiles('# Title')['index.html'] ?? '');
+    const vendored = fs.readFileSync(require.resolve('marked/marked.min.js'));
+    const digest = createHash('sha384').update(vendored).digest('base64');
+    expect(integrity).toBe(`sha384-${digest}`);
   });
 });

@@ -74,3 +74,8 @@ mcpServers:
       # Microsoft Edge on Windows; set it to a chrome.exe / msedge.exe to pick another browser.
       WEBSEARCH_RENDER: 'auto'
       WEBSEARCH_BROWSER_PATH: ''
+
+# Artifacts offline (roadmap 5c): nothing to switch on in this file. Artifacts are enabled per chat
+# from the Tools menu. For previews without the internet, set in .env:
+#   SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080
+# (port = PORT). See CLAUDE.md "Artifacts offline"; React previews still need codesandbox.io.
