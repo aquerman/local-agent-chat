@@ -84,6 +84,10 @@ syncs conflict only here.
   "requires an OCR service" because no `ocr` or `RAG_API_URL` is configured. Injected text is cut
   at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
 - PDFs uploaded before this override have no stored text and must be re-uploaded.
+- Clicking a PDF or image chip in a sent message opens the original file in the right-hand side panel
+  (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces the other.
+  For files the model read as text, a header button shows the extracted text. Other types and shared
+  links keep the upstream text dialog.
 
 ## Thinking mode
 
@@ -119,7 +123,9 @@ syncs conflict only here.
   screen: the desktop sidebar shows text rows (New chat, Chats, Agents, a Customize menu for the other
   panels, the account row) instead of the icon rail; the model selector sits next to Send; header
   actions live in the "…" menu at every width; the welcome-screen disclaimer is hidden; reply actions
-  appear on hover, the latest reply included. Conversation rows drop their endpoint icon.
+  appear on hover, the latest reply included. Conversation rows drop their endpoint icon. On
+  desktop (≥768px) the root font size is 112.5% (18px), set in `client/src/style.css` via
+  `html[data-layout="minimal"]`, which `routes/Root.tsx` sets.
 - Read it in the client with `useMinimalLayout()`. On a phone the drawer keeps its stock structure but its
   text is one size larger (`MINIMAL_DRAWER_TEXT` in `client/src/components/UnifiedSidebar/constants.ts`).
 

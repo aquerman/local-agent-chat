@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string */
 import React from 'react';
 import { useSetAtom } from 'jotai';
 import { RecoilRoot, useSetRecoilState } from 'recoil';
@@ -6,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TConversation } from 'librechat-data-provider';
 import type { Artifact } from '~/common';
 import { activeSubagentPanel } from '~/components/Chat/Subagents/state';
+import { useFilePanel } from '~/components/Chat/FilePanel';
 import { ChatSurfaceHarness } from 'test/harness';
 import Presentation from './Presentation';
 import store from '~/store';
@@ -44,6 +46,18 @@ jest.mock('~/components/Artifacts/Artifacts', () => {
     default: () => <aside>{artifactPanelLabel}</aside>,
   };
 });
+
+jest.mock('~/components/Chat/FilePanel/FilePanel', () => ({
+  __esModule: true,
+  default: ({ file, onClose }: { file: { filename?: string }; onClose: () => void }) => (
+    <aside>
+      document panel: {file.filename}
+      <button type="button" onClick={onClose}>
+        close document
+      </button>
+    </aside>
+  ),
+}));
 
 jest.mock('~/components/Chat/Subagents/SubagentThreadPanel', () => ({
   __esModule: true,
@@ -132,6 +146,19 @@ const OpenSubagentPanel = () => {
   return (
     <button type="button" onClick={open}>
       {mockOpenChildLabel}
+    </button>
+  );
+};
+
+const OpenDocument = ({ filename, type }: { filename: string; type: string }) => {
+  const filePanel = useFilePanel();
+  const [opened, setOpened] = React.useState<boolean | null>(null);
+  return (
+    <button
+      type="button"
+      onClick={() => setOpened(filePanel?.openFile({ file_id: filename, filename, type }) ?? null)}
+    >
+      open {filename} {opened == null ? '' : String(opened)}
     </button>
   );
 };
@@ -233,5 +260,68 @@ describe('Presentation Artifact loading', () => {
     fireEvent.click(screen.getByRole('button', { name: mockOpenArtifactLabel }));
     expect(await screen.findByText(mockArtifactPanelLabel)).toBeInTheDocument();
     expect(screen.queryByText(mockChildPanelLabel)).not.toBeInTheDocument();
+  });
+
+  it('shows a PDF in the panel and lets an opened artifact replace it', async () => {
+    renderPresentation(
+      <ChatSurfaceHarness>
+        <RecoilRoot>
+          <Presentation>
+            <OpenDocument filename="report.pdf" type="application/pdf" />
+            <OpenArtifactPanel />
+          </Presentation>
+        </RecoilRoot>
+      </ChatSurfaceHarness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open report\.pdf/ }));
+    expect(screen.getByText('document panel: report.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open report\.pdf true/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: mockOpenArtifactLabel }));
+    expect(await screen.findByText(mockArtifactPanelLabel)).toBeInTheDocument();
+    expect(screen.queryByText('document panel: report.pdf')).not.toBeInTheDocument();
+  });
+
+  it('replaces an open artifact with the document and closes on request', async () => {
+    renderPresentation(
+      <ChatSurfaceHarness>
+        <RecoilRoot>
+          <Presentation>
+            <OpenArtifactPanel />
+            <OpenDocument filename="photo.png" type="image/png" />
+          </Presentation>
+        </RecoilRoot>
+      </ChatSurfaceHarness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: mockOpenArtifactLabel }));
+    expect(await screen.findByText(mockArtifactPanelLabel)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /open photo\.png/ }));
+    expect(screen.getByText('document panel: photo.png')).toBeInTheDocument();
+    expect(screen.queryByText(mockArtifactPanelLabel)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'close document' }));
+    expect(screen.queryByText('document panel: photo.png')).not.toBeInTheDocument();
+  });
+
+  it('declines files the panel cannot render so callers keep the text dialog', () => {
+    renderPresentation(
+      <ChatSurfaceHarness>
+        <RecoilRoot>
+          <Presentation>
+            <OpenDocument
+              filename="notes.docx"
+              type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            />
+          </Presentation>
+        </RecoilRoot>
+      </ChatSurfaceHarness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open notes\.docx/ }));
+    expect(screen.getByRole('button', { name: /open notes\.docx false/ })).toBeInTheDocument();
+    expect(screen.queryByText(/document panel/)).not.toBeInTheDocument();
   });
 });

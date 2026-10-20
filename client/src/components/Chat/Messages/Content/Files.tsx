@@ -3,12 +3,14 @@ import type { TFile, TMessage } from 'librechat-data-provider';
 import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import { usesImagePreview, hydrateFileDeliveryMetadata } from '~/utils';
 import { useFileMapContext, useShareContext } from '~/Providers';
+import { useFilePanel } from '~/components/Chat/FilePanel';
 import FilePreviewDialog from './FilePreviewDialog';
 import Image from './Image';
 
 const Files = ({ message }: { message?: TMessage }) => {
   const fileMap = useFileMapContext();
   const { shareId } = useShareContext();
+  const filePanel = useFilePanel();
   const files = useMemo(
     () => hydrateFileDeliveryMetadata(message?.files, undefined, shareId ? undefined : fileMap),
     [message?.files, fileMap, shareId],
@@ -23,6 +25,16 @@ const Files = ({ message }: { message?: TMessage }) => {
 
   const [selectedFile, setSelectedFile] = useState<Partial<TFile> | null>(null);
 
+  const handleFileClick = useCallback(
+    (file: Partial<TFile>) => {
+      if (!shareId && filePanel?.openFile(file) === true) {
+        return;
+      }
+      setSelectedFile(file);
+    },
+    [filePanel, shareId],
+  );
+
   const handleClose = useCallback((open: boolean) => {
     if (!open) {
       setSelectedFile(null);
@@ -36,7 +48,7 @@ const Files = ({ message }: { message?: TMessage }) => {
           <FileContainer
             key={file.file_id}
             file={file as TFile}
-            onClick={() => setSelectedFile(file)}
+            onClick={() => handleFileClick(file)}
           />
         ))}
       {imageFiles.length > 0 &&
