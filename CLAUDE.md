@@ -38,7 +38,7 @@ syncs conflict only here.
   `mongodb-memory-server` and do not need it.
 - **Node 24.19 LTS is the single system Node** (winget `OpenJS.NodeJS.LTS`), close to the `.nvmrc`
   pin of 24.16.0. No version manager: fnm and nvm-windows rely on directory junctions under
-  `AppData`, and junctions there cannot be traversed by cmd/PowerShell on this machine (Bitdefender),
+  `AppData`, and junctions there cannot be traversed by cmd/PowerShell on this machine (antivirus),
   so they silently fail to switch. Do not reintroduce one without testing that first.
 - Package manager is **npm** (`package-lock.json`, `"packageManager": "npm@11"`), not pnpm: the
   upstream scripts and Turborepo config assume npm workspaces, and pnpm's symlinked store under
