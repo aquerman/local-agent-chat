@@ -331,6 +331,29 @@ syncs conflict only here.
   (mock model), each a new agents chat with the reply and `lastRun: success`; Run now against the
   CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
   `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
+## Documents (Word, PDF, PowerPoint)
+
+- `packages/documents` is a stdio MCP server (roadmap 5a) with two tools: `create_document(format, title,
+  content | slides)` and `append_section(document_id, content | slides)`. The model writes Markdown
+  (docx/pdf) or a slide outline (pptx: `slides` array of `{title, bullets?, left?, right?, notes?}`, or a
+  Markdown outline in `content`), never OOXML; the server renders with `docx`, `pptxgenjs` and headless
+  Chromium print-to-PDF (`playwright-core`) in one built-in house style (`src/theme.ts`). Long documents
+  are written section by section: each `append_section` re-renders the whole file from the stored source.
+- Drafts and the last rendered file live in `DOCUMENTS_DIR/<document_id>/` (default `%TEMP%\bennychat-documents`).
+  Other env: `DOCUMENTS_PAGE_SIZE` (`A4`/`Letter`), `DOCUMENTS_BROWSER_PATH` / `DOCUMENTS_BROWSER_CHANNEL`
+  (PDF browser; on Windows the installed Edge via channel `msedge`, nothing is downloaded),
+  `DOCUMENTS_MAX_BYTES`, `DOCUMENTS_MAX_SECTIONS`.
+- Each result returns the file as an embedded `resource` with a base64 `blob`. Upstream only turns MCP
+  *images* into attachments and summarizes other blobs, so the fork adds the MCP server option
+  `fileOutputs: true` (`packages/data-provider/src/mcp.ts`, YAML-only): `formatToolContent`
+  (`packages/api/src/mcp/parsers.ts`) moves such blobs into an `mcp_files` artifact and tells the model
+  "File attached to the chat", and `createToolEndCallback` (`api/server/controllers/agents/callbacks.js`)
+  stores them through `processCodeOutput` with a prepared buffer, the same pipeline as code-interpreter
+  outputs. That gives a download chip, per-conversation filename reuse (an append updates the same file)
+  and the upstream office HTML preview card. Files over the endpoint upload limit are dropped with a warning.
+- Wired in `bennychat.yaml` under `mcpServers.documents` (`alwaysOn`, `fileOutputs`). Tests:
+  `cd packages/documents && npx jest` (PDF tests need a browser: Edge on Windows, else set
+  `DOCUMENTS_BROWSER_PATH`); typecheck with `npx tsc --noEmit` there.
 
 ## Agents, Benny and approvals (roadmap F3, 13)
 

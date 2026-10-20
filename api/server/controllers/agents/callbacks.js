@@ -33,9 +33,15 @@ const {
   getToolInputValidationDetails,
   captureSubagentIdentity,
   collectToolCallIds,
+  MCP_FILE_OUTPUTS_KEY,
+  prepareMCPFileOutputs,
 } = require('@librechat/api');
 const { processFileCitations } = require('~/server/services/Files/Citations');
-const { processCodeOutput, runPreviewFinalize } = require('~/server/services/Files/Code/process');
+const {
+  processCodeOutput,
+  runPreviewFinalize,
+  getCodeOutputFileSettings,
+} = require('~/server/services/Files/Code/process');
 const { preflightCodeOutputBatch } = require('~/server/services/Files/Code/preflight');
 const { saveBase64Image } = require('~/server/services/Files/process');
 
@@ -88,6 +94,76 @@ async function enqueueCodeOutputBatch({
         return null;
       });
     persistenceChain = current.then(() => undefined);
+    artifactPromises.push(current);
+  }
+}
+
+/**
+ * Stores the files an MCP server with `fileOutputs: true` returned through the shared
+ * file-output pipeline (as code outputs are), so they reach the chat as attachments with the
+ * same per-conversation filename reuse and office previews. Files run one at a time, as code
+ * outputs do, so two writes of one filename cannot race for its record.
+ */
+function enqueueMCPFileOutputs({
+  req,
+  res,
+  streamId,
+  jobCreatedAt,
+  artifactPromises,
+  output,
+  metadata,
+}) {
+  const { fileSizeLimit } = getCodeOutputFileSettings(req);
+  const { ready, oversized } = prepareMCPFileOutputs(
+    output.artifact[MCP_FILE_OUTPUTS_KEY],
+    fileSizeLimit,
+  );
+  if (oversized.length > 0) {
+    logger.warn(
+      `[MCP file outputs] Dropped files over ${fileSizeLimit} bytes: ${oversized.join(', ')}`,
+    );
+  }
+  const toolCallId = output.tool_call_id;
+  let chain = Promise.resolve();
+  for (const file of ready) {
+    const current = chain
+      .then(async () => {
+        const result = await processCodeOutput({
+          req,
+          id: file.id,
+          name: file.name,
+          messageId: metadata.run_id,
+          toolCallId,
+          conversationId: metadata.thread_id,
+          session_id: file.sessionId,
+          preparedBuffer: file.buffer,
+        });
+        const fileMetadata = result?.file ?? null;
+        if (!fileMetadata) {
+          return null;
+        }
+        if (isStreamWritable(res, streamId)) {
+          writeAttachment(res, streamId, fileMetadata, jobCreatedAt);
+        }
+        runPreviewFinalize({
+          finalize: result.finalize,
+          fileId: fileMetadata.file_id,
+          previewRevision: result.previewRevision,
+          onResolved: (updated) =>
+            writeAttachmentUpdate(
+              res,
+              streamId,
+              { ...updated, messageId: metadata.run_id, toolCallId },
+              jobCreatedAt,
+            ),
+        });
+        return fileMetadata;
+      })
+      .catch((error) => {
+        logger.error('[MCP file outputs] Error storing file output:', error);
+        return null;
+      });
+    chain = current.then(() => undefined);
     artifactPromises.push(current);
   }
 }
@@ -1064,6 +1140,18 @@ function createToolEndCallback({ req, res, artifactPromises, streamId = null, jo
           return null;
         }),
       );
+    }
+
+    if (output.artifact[MCP_FILE_OUTPUTS_KEY]) {
+      enqueueMCPFileOutputs({
+        req,
+        res,
+        streamId,
+        jobCreatedAt,
+        artifactPromises,
+        output,
+        metadata,
+      });
     }
 
     if (output.artifact.content) {

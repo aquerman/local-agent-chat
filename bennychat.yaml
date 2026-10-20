@@ -211,6 +211,20 @@ mcpServers:
       EMAIL_IMAP_SECURE: ''
       EMAIL_MAX_CHARS: '4000'
 
+  # Roadmap 5a, documents (packages/documents): create_document / append_section render Word,
+  # PDF and PowerPoint files from Markdown or a slide outline in a built-in house style.
+  # `fileOutputs: true` (fork MCP option) turns the returned files into chat attachments.
+  # PDF printing uses the installed Microsoft Edge on Windows (nothing is downloaded); set
+  # DOCUMENTS_BROWSER_PATH to use another Chromium-based browser.
+  documents:
+    type: stdio
+    command: node
+    args: ['packages/documents/dist/index.cjs']
+    alwaysOn: true
+    fileOutputs: true
+    env:
+      DOCUMENTS_PAGE_SIZE: 'A4'
+
 # Artifacts offline (roadmap 5c): nothing to switch on in this file. Artifacts are enabled per chat
 # from the Tools menu. For previews without the internet, set in .env:
 #   SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080

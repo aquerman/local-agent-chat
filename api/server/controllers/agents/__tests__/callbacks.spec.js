@@ -25,11 +25,14 @@ jest.mock('@librechat/api', () => ({
   isCodeArtifactToolOutput: jest.requireActual('@librechat/api').isCodeArtifactToolOutput,
   isCodeSessionToolName: jest.requireActual('@librechat/api').isCodeSessionToolName,
   collectToolCallIds: jest.requireActual('@librechat/api').collectToolCallIds,
+  MCP_FILE_OUTPUTS_KEY: jest.requireActual('@librechat/api').MCP_FILE_OUTPUTS_KEY,
+  prepareMCPFileOutputs: jest.requireActual('@librechat/api').prepareMCPFileOutputs,
 }));
 
 jest.mock('@librechat/data-schemas', () => ({
   logger: {
     debug: jest.fn(),
+    warn: jest.fn(),
     error: jest.fn(),
   },
 }));
@@ -47,6 +50,7 @@ jest.mock('~/server/services/Files/Citations', () => ({
 
 jest.mock('~/server/services/Files/Code/process', () => ({
   processCodeOutput: jest.fn(),
+  getCodeOutputFileSettings: jest.fn(() => ({ fileSizeLimit: 64 })),
   /* `runPreviewFinalize` is the runtime pairing for `finalize` (defined
    * alongside processCodeOutput in process.js). The callback wires
    * the deferred render through it; reproduce the basic happy-path here so the
@@ -1303,6 +1307,72 @@ describe('createToolEndCallback', () => {
 
       expect(processCodeOutput).not.toHaveBeenCalled();
       expect(artifactPromises).toHaveLength(0);
+      expect(res.write).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('MCP file outputs', () => {
+    const { processCodeOutput } = require('~/server/services/Files/Code/process');
+
+    function mcpFileEvent(files) {
+      return {
+        output: {
+          name: 'create_document_mcp_documents',
+          tool_call_id: 'tool-1',
+          artifact: { mcp_files: files },
+        },
+        metadata: { run_id: 'run-1', thread_id: 'thread-1' },
+      };
+    }
+
+    const file = (filename, bytes) => ({
+      serverName: 'documents',
+      uri: `documents://abc/${filename}`,
+      filename,
+      mimeType: 'application/pdf',
+      data: Buffer.alloc(bytes, 1).toString('base64'),
+      bytes,
+    });
+
+    it('stores each file through the file-output pipeline and streams it as an attachment', async () => {
+      res.headersSent = true;
+      processCodeOutput.mockImplementation(async ({ name }) => ({
+        file: { file_id: `fid-${name}`, filename: name, filepath: `/uploads/${name}` },
+      }));
+      const toolEndCallback = createToolEndCallback({ req, res, artifactPromises });
+      const event = mcpFileEvent([file('a.pdf', 10), file('big.pdf', 100), file('b.pdf', 20)]);
+
+      await toolEndCallback({ output: event.output }, event.metadata);
+      const stored = await Promise.all(artifactPromises);
+
+      expect(stored.map((entry) => entry.filename)).toEqual(['a.pdf', 'b.pdf']);
+      expect(processCodeOutput).toHaveBeenCalledTimes(2);
+      const [first] = processCodeOutput.mock.calls[0];
+      expect(first).toMatchObject({
+        req,
+        name: 'a.pdf',
+        messageId: 'run-1',
+        toolCallId: 'tool-1',
+        conversationId: 'thread-1',
+        session_id: 'mcp_documents',
+      });
+      expect(first.preparedBuffer.equals(Buffer.alloc(10, 1))).toBe(true);
+      expect(res.write).toHaveBeenCalledTimes(2);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('big.pdf'));
+    });
+
+    it('returns the stored file for the final message when nothing is streaming', async () => {
+      processCodeOutput.mockResolvedValue({
+        file: { file_id: 'fid-1', filename: 'a.pdf', filepath: '/uploads/a.pdf' },
+      });
+      const toolEndCallback = createToolEndCallback({ req, res, artifactPromises });
+      const event = mcpFileEvent([file('a.pdf', 10)]);
+
+      await toolEndCallback({ output: event.output }, event.metadata);
+
+      await expect(Promise.all(artifactPromises)).resolves.toEqual([
+        expect.objectContaining({ file_id: 'fid-1' }),
+      ]);
       expect(res.write).not.toHaveBeenCalled();
     });
   });

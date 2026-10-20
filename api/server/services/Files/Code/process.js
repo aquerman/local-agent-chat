@@ -1630,6 +1630,7 @@ module.exports = {
   checkIfActive,
   getSessionInfo,
   processCodeOutput,
+  getCodeOutputFileSettings,
   prepareCodeOutputForInspection,
   readWorkspaceFile,
   searchWorkspace,

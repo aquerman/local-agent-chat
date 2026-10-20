@@ -149,9 +149,28 @@ export type FileSearchSource = {
   [key: string]: unknown;
 };
 
+/** A binary file an MCP server returned as an embedded resource, bound for the chat as an attachment. */
+export interface MCPFileOutput {
+  serverName: string;
+  uri: string;
+  filename: string;
+  mimeType: string;
+  /** Base64 file content, as the server sent it. */
+  data: string;
+  bytes: number;
+}
+
+/** Per-server behavior `formatToolContent` needs beyond the result itself. */
+export interface FormatToolContentOptions {
+  serverName?: string;
+  /** The server's `fileOutputs` config flag. */
+  fileOutputs?: boolean;
+}
+
 export type Artifacts =
   | {
       content?: FormattedContent[];
+      mcp_files?: MCPFileOutput[];
       [Tools.ui_resources]?: {
         data: UIResource[];
       };

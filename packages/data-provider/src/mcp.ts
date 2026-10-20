@@ -247,6 +247,12 @@ const BaseOptionsSchema = z.object({
    */
   alwaysOn: z.boolean().optional(),
   /**
+   * Turns binary files the server returns as embedded resources (`resource` content with a
+   * `blob`, any non-image MIME type) into chat attachments the user can download, instead of a
+   * one-line summary. Operator-only: a user-defined server cannot set it. Default: false.
+   */
+  fileOutputs: z.boolean().optional(),
+  /**
    * Controls server instruction behavior:
    * - undefined/not set: No instructions included (default)
    * - true: Use server-provided instructions
@@ -505,6 +511,7 @@ const omitServerManagedFields = <T extends z.ZodObject<z.ZodRawShape>>(schema: T
     oauthPersistenceWaitTimeout: true,
     chatMenu: true,
     alwaysOn: true,
+    fileOutputs: true,
     serverInstructions: true,
     requiresOAuth: true,
     customUserVars: true,
