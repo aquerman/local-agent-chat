@@ -31,8 +31,8 @@ from a phone over Tailscale.
   for models that reason (for example Qwen3.5). Reasoning shows as "Thinking..." and then
   "Thought for Ns", which you can click to read.
 - **Web search.** A small built-in MCP server (`packages/websearch`) gives the model `search`
-  (DuckDuckGo, no API key) and `fetch` (a web page as readable text). Turn it on from the MCP selector
-  in the input bar.
+  (DuckDuckGo, no API key) and `fetch` (a web page as readable text). With `alwaysOn: true` on the
+  server in `librechat.yaml` it is attached to every chat, so there is nothing to switch on.
 
 ## Running it (Windows)
 
