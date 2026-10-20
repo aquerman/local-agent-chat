@@ -42,7 +42,7 @@ What you need: Node 24, MongoDB running locally on `127.0.0.1:27017`, and
 ```bash
 npm ci
 cp .env.example .env
-cp librechat.example.yaml librechat.yaml   # then add the local-llm custom endpoint
+cp bennychat.yaml librechat.yaml          # BennyChat's config, already wired to local-llm
 npm run build
 ```
 
@@ -54,7 +54,7 @@ Open <http://localhost:3080>. After pulling frontend changes, run `npm run build
 
 ### Wiring up the model
 
-In `librechat.yaml`, add local-llm as a custom endpoint and allow the loopback address, which
+`bennychat.yaml` already contains this. To wire a stock `librechat.yaml` by hand, add local-llm as a custom endpoint and allow the loopback address, which
 LibreChat blocks by default:
 
 ```yaml
