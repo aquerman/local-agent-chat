@@ -60,7 +60,8 @@ syncs conflict only here.
 - MongoDB is a Windows service, so only two processes need starting: llama-server (local-llm) and
   the LibreChat backend (this repo). `scripts\start-all.bat` starts both in one Windows Terminal
   window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. With chat
-  search on it adds a Meilisearch tab (port 7700, see "Chat search"). The
+  search on it adds a Meilisearch tab (port 7700, see "Chat search"); with retrieval set up,
+  "Embeddings" and "RAG API" tabs (see "Knowledge and RAG"). The
   Desktop `Start All`, `Start Chat` and `Start Server` entries are shortcuts (`.lnk`) to the repo
   files, so editing a script here is enough.
 - `scripts\start-chat.bat` starts only LibreChat (`npm run backend`, which serves the built client).
@@ -153,6 +154,43 @@ syncs conflict only here.
 - Verified 2026-10-20 in a Linux rig with the `getmeili/meilisearch:v1.35.1` image (not the
   Windows exe): pre-existing chats were indexed at startup, the sidebar search returned them by a
   word from a reply, and a newly sent message was found too.
+
+## Knowledge and RAG
+
+- Upstream's retrieval path, run natively: LibreChat's RAG API (`danny-avila/rag_api`, Python/FastAPI)
+  with PostgreSQL 16 + pgvector, embeddings from a second llama-server (`--embedding`, local-llm's
+  `scripts\start-embeddings.ps1`, nomic-embed-text-v1.5 Q8_0 on 127.0.0.1:8081, ~0.3 GB VRAM).
+  pgvector is the only store rag_api offers besides Atlas; MongoDB Community's vector search
+  (mongot) has no Windows build. conda-forge is the only prebuilt pgvector for Windows, so one
+  conda env holds Python 3.12, PostgreSQL and pgvector: no admin rights, no compiler, no Docker.
+- User installs: Miniforge (`winget install CondaForge.Miniforge3`) and git. Then
+  `scripts\setup-rag.ps1` clones rag_api into `..\rag_api` (pinned commit `c4e5cbf`), creates
+  `..\rag_api\env`, pip-installs `requirements.lite.txt`, and creates the database in
+  `%LOCALAPPDATA%\bennychat\rag\pgdata` (127.0.0.1:5433, password auth). Re-running skips done steps.
+- `.env` keys: the commented "BennyChat, fully local" block under RAG in `.env.example`
+  (`RAG_API_URL`, `RAG_PORT`, `EMBEDDINGS_PORT`, `RAG_OPENAI_BASEURL`, `DB_PORT`, `POSTGRES_*`,
+  `RAG_CHECK_EMBEDDING_CTX_LENGTH=False` so text, not tiktoken ids, reaches llama-server).
+  `scripts\start-rag.ps1` loads the whole `.env` into rag_api, like upstream's compose `env_file`,
+  so both sides share `JWT_SECRET` and rag_api scopes chunks to the uploading user.
+- `start-all.bat` adds an "Embeddings" tab when `EMBEDDINGS_PORT` is set (skipped with a note if
+  local-llm's exe or script is missing) and a "RAG API" tab when `RAG_API_URL` is set and
+  `..\rag_api\env` exists; each is skipped when its port listens. `start-rag.ps1` starts
+  PostgreSQL in the background and stops it on Ctrl+C.
+- Using it in chat: `fileConfig.endpoints.custom.legacyFileUploadUX: true` (commented out in
+  `bennychat.yaml`) brings back the attach chooser; turn on File Search in the tools menu, then
+  "Upload for File Search". Each turn LibreChat queries `/query` with the user's message (k=4,
+  `packages/api/src/files/rag/context.ts`) and injects those chunks; the model can also call
+  `file_search`. Keep `RAG_USE_FULL_CONTEXT` unset, or whole files come back. In the chooser,
+  "Upload to Provider" sends PDFs as bytes (llama-server 400): use it for images only. Agents with
+  File Search (Agent Builder) embed their files the same way without the chooser.
+- Follow-up idea: route big text uploads to file_search automatically in unified mode (Claude
+  Projects switches to retrieval when knowledge outgrows the context) instead of the chooser.
+- Verified 2026-10-20 in the Linux rig (pgvector:pg16 image, rag_api at the pinned commit in a
+  Python 3.12 venv, llama-server `--embedding` with the F16 nomic file, Qwen3-1.7B): a 22 KB text
+  file uploaded for File Search was embedded (65 chunks for an 84 KB one), the chat answer quoted the
+  one matching chunk, rag_api logged `/embed` then `/query`, and the request was ~1.9k tokens where
+  the whole file is ~6k. Not verified: the Windows scripts (no PowerShell or Windows here), the
+  conda-forge packages, agent knowledge files, and Qwen3.5-9B.
 
 ## Skills
 

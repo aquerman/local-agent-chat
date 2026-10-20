@@ -1,6 +1,8 @@
 @echo off
 rem Starts everything needed for a chat session in one Windows Terminal window:
 rem   tab "llama-server"  the model server from ..\local-llm, listening on 127.0.0.1:8080
+rem   tab "Embeddings"    local-llm's embeddings server, only with EMBEDDINGS_PORT in .env
+rem   tab "RAG API"       retrieval over uploaded files, only with RAG_API_URL in .env and ..\rag_api set up
 rem   tab "Meilisearch"   chat search, 127.0.0.1:7700, only with SEARCH=true in .env and bin\meilisearch.exe
 rem   tab "LibreChat"     the LibreChat backend from this repo, listening on localhost:3080
 rem MongoDB runs as a Windows service and needs no tab.
@@ -34,9 +36,15 @@ netstat -ano | findstr /r /c:":3080 .*LISTENING" >nul && (
 rem Meilisearch (chat search) is optional: it starts only when .env has SEARCH=true and
 rem bin\meilisearch.exe exists, so the launcher works the same without it.
 set "SEARCH="
+set "EMBEDDINGS_PORT="
+set "RAG_API_URL="
+set "RAG_PORT=8000"
 if exist "%CHAT%\.env" (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%CHAT%\.env") do (
     if /i "%%A"=="SEARCH" set "SEARCH=%%B"
+    if /i "%%A"=="EMBEDDINGS_PORT" set "EMBEDDINGS_PORT=%%B"
+    if /i "%%A"=="RAG_API_URL" set "RAG_API_URL=%%B"
+    if /i "%%A"=="RAG_PORT" set "RAG_PORT=%%B"
   )
 )
 if /i "%SEARCH%"=="true" set "START_MEILI=1"
@@ -52,9 +60,43 @@ if defined START_MEILI (
   )
 )
 
+rem Retrieval over uploaded files (roadmap F4/R9) is optional as well. EMBEDDINGS_PORT in .env opens
+rem local-llm's embeddings server; RAG_API_URL opens the RAG API, which scripts\setup-rag.ps1 installs
+rem once into ..\rag_api. Each is skipped with a note when its part is missing.
+set "START_EMBED="
+set "START_RAG="
+if defined EMBEDDINGS_PORT set "START_EMBED=1"
+if defined RAG_API_URL set "START_RAG=1"
+if defined START_EMBED if not exist "%LLM%\bin\llama-server.exe" (
+  echo EMBEDDINGS_PORT is set but ..\local-llm\bin\llama-server.exe is missing, so embeddings stay off.
+  set "START_EMBED="
+)
+if defined START_EMBED if not exist "%LLM%\scripts\start-embeddings.ps1" (
+  echo EMBEDDINGS_PORT is set but local-llm has no scripts\start-embeddings.ps1 yet: pull local-llm.
+  set "START_EMBED="
+)
+if defined START_EMBED (
+  netstat -ano | findstr /r /c:":%EMBEDDINGS_PORT% .*LISTENING" >nul && (
+    echo The embeddings server is already listening on port %EMBEDDINGS_PORT%, not starting it again.
+    set "START_EMBED="
+  )
+)
+if defined START_RAG if not exist "%CHAT%\..\rag_api\env\python.exe" (
+  echo RAG_API_URL is set but the RAG API is not installed: run scripts\setup-rag.ps1 once.
+  set "START_RAG="
+)
+if defined START_RAG (
+  netstat -ano | findstr /r /c:":%RAG_PORT% .*LISTENING" >nul && (
+    echo The RAG API is already listening on port %RAG_PORT%, not starting it again.
+    set "START_RAG="
+  )
+)
+
 rem Each tab is appended as " ; new-tab ..."; the leading " ; " is cut before wt runs.
 set "TABS="
 if defined START_LLM set "TABS=%TABS% ; new-tab --title "llama-server" -d "%LLM%" powershell -NoProfile -ExecutionPolicy Bypass -NoExit -File "%LLM%\scripts\start-server.ps1""
+if defined START_EMBED set "TABS=%TABS% ; new-tab --title "Embeddings" -d "%LLM%" powershell -NoProfile -ExecutionPolicy Bypass -NoExit -File "%LLM%\scripts\start-embeddings.ps1" -Port %EMBEDDINGS_PORT%"
+if defined START_RAG set "TABS=%TABS% ; new-tab --title "RAG API" -d "%CHAT%" powershell -NoProfile -ExecutionPolicy Bypass -NoExit -File "%CHAT%\scripts\start-rag.ps1""
 if defined START_MEILI set "TABS=%TABS% ; new-tab --title "Meilisearch" -d "%CHAT%" cmd /k "%CHAT%\scripts\start-meili.bat""
 if defined START_CHAT set "TABS=%TABS% ; new-tab --title "LibreChat" -d "%CHAT%" cmd /k npm run backend"
 
