@@ -175,7 +175,9 @@ syncs conflict only here.
   use it (prompt budget). Names must be kebab-case and cannot start with `claude-`/`anthropic-`.
 - Verified 2026-10-20 in the cloud rig (logging proxy in front of llama-server): catalog without
   bodies, the `$` pick priming the body, and a `skill` tool call returning the body (mock model).
-  Qwen3-1.7B did not call `skill` on its own (it misused `create_file`); untested on Qwen3.5-9B.
+  Qwen3-1.7B never called `skill`, even when told to: it reached for `create_file` both times. Check
+  Qwen3.5-9B; if it does the same, rely on `$` or turn off `interface.skills.create` (which also hides
+  "Create skill" in the UI).
 
 ## Keyboard shortcuts
 
