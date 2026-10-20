@@ -154,6 +154,31 @@ syncs conflict only here.
   Windows exe): pre-existing chats were indexed at startup, the sidebar search returned them by a
   word from a reply, and a newly sent message was found too.
 
+## Skills
+
+- Upstream Skills (`SKILL.md` with `name` + `description` frontmatter, optional bundled files). Starter
+  skills ship in `skill/` (upstream's deployment directory, `DEPLOYMENT_SKILLS_DIR` overrides it, path
+  relative to the backend's cwd): `morning-brief`, `weekly-review`, `meeting-notes`, `house-style`.
+  They load at startup (log: `[deploymentSkills] Loaded 4`), are read-only and active for every user;
+  edit the file and restart the backend to change one. Users add their own in the Skills panel
+  (Customize menu) or by uploading a `SKILL.md`; those live in MongoDB.
+- Switched on per chat from the tools menu ("Skills" badge; new chats remember the last setting) or by
+  typing `$` in the composer to pick one (that primes its body directly, no tool call needed: the
+  reliable path for a small model). F3's model spec can set `skills: true` to make them always on.
+- Progressive disclosure: with the badge on, the prompt gets a system block `## Available Skills`
+  (name + description only, ~40 tokens each) and a `skill` tool; the body enters the context only as
+  the result of a `skill` call or a `$` pick. Catalog capped by `endpoints.agents.skills.maxCatalogSkills`
+  (12 in `bennychat.yaml`). The badge also adds `read_file`, plus `create_file`/`edit_file` while the
+  user may create skills (`interface.skills.create`): about 1.6k tokens of tool schemas in total.
+  Keep descriptions one sentence, "what + Use when ...", so a 9B model can match them.
+- `always-apply: true` in a skill's frontmatter primes its body into every turn; none of the starters
+  use it (prompt budget). Names must be kebab-case and cannot start with `claude-`/`anthropic-`.
+- Verified 2026-10-20 in the cloud rig (logging proxy in front of llama-server): catalog without
+  bodies, the `$` pick priming the body, and a `skill` tool call returning the body (mock model).
+  Qwen3-1.7B never called `skill`, even when told to: it reached for `create_file` both times. Check
+  Qwen3.5-9B; if it does the same, rely on `$` or turn off `interface.skills.create` (which also hides
+  "Create skill" in the UI).
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

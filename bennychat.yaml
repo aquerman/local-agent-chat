@@ -15,6 +15,11 @@ cache: true
 interface:
   # Claude Desktop-style sidebar and composer (fork option, see CLAUDE.md "Minimal layout").
   layout: minimal
+  # Roadmap 10 (skills): who may use and author Skills. Starter skills live in skill/ (read-only,
+  # loaded at startup); users can add their own from the Skills panel.
+  skills:
+    use: true
+    create: true
 
 endpoints:
   # LibreChat's SSRF guard blocks loopback unless it is listed here as host:port.
@@ -38,6 +43,13 @@ endpoints:
           low: 512
           medium: 2048
           high: 6144
+
+  # Roadmap 10 (skills): the model sees only a catalog of names + one-line descriptions and loads
+  # a skill's body with the `skill` tool when it needs it. Cap the catalog so a 9B model's prompt
+  # stays small (~40 tokens per skill). `skills` must stay in agents.capabilities (upstream default).
+  agents:
+    skills:
+      maxCatalogSkills: 12
 
 fileConfig:
   endpoints:
