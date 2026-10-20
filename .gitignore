@@ -118,6 +118,8 @@ docker-compose.override.yml
 # meilisearch
 meilisearch
 meilisearch.exe
+# BennyChat: native Windows binaries for the launcher (bin\meilisearch.exe)
+/bin/
 data.ms/*
 auth.json
 
