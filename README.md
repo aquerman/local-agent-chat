@@ -38,6 +38,10 @@ from a phone over Tailscale.
   and `WEBSEARCH_BROWSER_PATH` in the server's `env` block change that.
 - **Search past chats.** LibreChat's sidebar search, backed by a local Meilisearch that
   `scripts\start-all.bat` starts from `bin\meilisearch.exe` (optional, see below).
+- **Starter skills.** Four generic skills in `skill/` (morning brief, weekly review, meeting notes,
+  document house style), in Claude's `SKILL.md` format. Turn on "Skills" in the tools menu and the
+  model sees only their names and one-line descriptions, loading a skill's full instructions when it
+  needs one; or type `$` to pick one yourself. Add your own from the Skills panel.
 
 ## Running it (Windows)
 
