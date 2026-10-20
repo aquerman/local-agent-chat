@@ -297,8 +297,13 @@ syncs conflict only here.
 - One GPU: routines and live chat share llama-server. Unless local-llm starts it with `--parallel 2`
   (local-llm's launcher, roadmap F1), a routine run blocks chat until it finishes, and vice versa.
 - The PC must be awake at run time: README "Routines" covers awake hours and wake timers.
-- Verified 2026-10-20 in the cloud rig (CPU Qwen3-1.7B): engine armed, schedule created over the API,
-  an automatic run and Run now fired against the local model, run filed as an agents conversation.
+- `SCHEDULES_SINGLE_PROCESS` is a promise that one backend uses this MongoDB. Two backends on the
+  same database each run an engine and mark the other's live runs `interrupted` (seen in the rig).
+- Verified 2026-10-20 in the cloud rig: engine armed; schedule created over the API and shown in the
+  panel; with the interval lowered to 1 min in a scratch config, a `*/2` cron fired 5 runs in a row
+  (mock model), each a new agents chat with the reply and `lastRun: success`; Run now against the
+  CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
+  `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
 
 ## Keyboard shortcuts
 
