@@ -4,6 +4,6 @@ rem MongoDB runs as a Windows service; the model server is started separately by
 rem Use scripts\start-all.bat to start both servers at once.
 rem "pause" keeps the window open after the server exits so errors stay readable.
 title LibreChat
-cd /d "C:\Users\aquerman\Documents\GitHub\local-agent-chat"
+cd /d "%~dp0.."
 npm run backend
 pause

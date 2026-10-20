@@ -5,11 +5,12 @@ rem   tab "LibreChat"     the LibreChat backend from this repo, listening on loc
 rem MongoDB runs as a Windows service and needs no tab.
 rem A tab is skipped when its port already has a listener, so re-running never starts a second copy.
 rem Close a tab or press Ctrl+C in it to stop that server.
-rem The Desktop "Start All" entry is a shortcut to this file; the paths below are absolute on purpose.
+rem The Desktop "Start All" entry is a shortcut to this file. Paths are resolved from this file's folder
+rem (%~dp0), so they do not depend on where the shortcut starts; local-llm sits next to this repo.
 
 setlocal
-set "LLM=C:\Users\aquerman\Documents\GitHub\local-llm"
-set "CHAT=C:\Users\aquerman\Documents\GitHub\local-agent-chat"
+for %%I in ("%~dp0..") do set "CHAT=%%~fI"
+for %%I in ("%CHAT%\..\local-llm") do set "LLM=%%~fI"
 
 where wt >nul 2>nul || (
   echo Windows Terminal ^(wt.exe^) is not installed. Install it from the Microsoft Store.

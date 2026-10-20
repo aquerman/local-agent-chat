@@ -1532,7 +1532,7 @@ Expected: `stdout` is `""`; `stderr` contains `websearch: ready`.
 
 - [ ] **Step 3: Smoke-test the built artifact over real stdio**
 
-Write `C:\Users\aquerman\AppData\Local\Temp\claude\C--Users-aquerman-Documents-GitHub-local-agent-chat\59d5b0c7-eb84-4d72-9e27-1933e6c6860f\scratchpad\smoke.cjs` (throwaway, not committed):
+Write `<scratchpad>\smoke.cjs` (throwaway, not committed):
 
 ```js
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
