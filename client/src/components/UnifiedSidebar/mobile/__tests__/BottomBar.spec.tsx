@@ -9,7 +9,7 @@ jest.mock('~/hooks', () => ({
 }));
 
 jest.mock('~/hooks/useKeyboardShortcuts', () => ({
-  useShortcutAriaKey: () => 'Meta+Shift+O',
+  useShortcutAriaKey: () => 'Meta+N',
 }));
 
 jest.mock('@librechat/client', () => ({

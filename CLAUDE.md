@@ -121,6 +121,16 @@ syncs conflict only here.
   `fetch` unprompted in that exchange; `fetch` itself is verified over stdio. With a 1 ms timeout
   both tools return their `isError` text instead of throwing.
 
+## Keyboard shortcuts
+
+- New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in
+  `client/src/hooks/useKeyboardShortcuts.ts`. It also fires while typing in the composer
+  (`EDITING_ALLOWED_SHORTCUTS`).
+- Chrome, Edge and Firefox reserve Ctrl+N in a normal tab: it opens a new window before the page sees
+  the keypress, and `preventDefault` cannot stop it. It reaches the app only in an installed app
+  window (Edge/Chrome: "Install this site as an app" on `http://localhost:3080`; the client ships a
+  `standalone` manifest). In a tab, rebind it in the Keyboard Shortcuts dialog (Ctrl+Shift+/).
+
 ## Minimal layout
 
 - `interface.layout: minimal` in `librechat.yaml` (default `classic`) gives a Claude Desktop-style
