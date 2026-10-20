@@ -2793,6 +2793,43 @@ export const memorySchema = z.object({
 
 export type TMemoryConfig = DeepPartial<z.infer<typeof memorySchema>>;
 
+/**
+ * Phone notifications (fork option). Off unless `enabled: true`, so deployments without
+ * this block behave exactly as before. String values accept `${ENV_VAR}` references,
+ * resolved at send time, so a topic or URL that identifies a person stays in `.env`.
+ * One delivery target per deployment: meant for single-user installs.
+ */
+export const notificationsSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Base URL the phone opens on tap, e.g. the chat's Tailscale address; `/c/<id>` is appended. */
+  publicBaseUrl: z.string().optional(),
+  /** Put the first line of the routine's reply in the body; false sends only a generic text,
+   *  so chat content never passes through a third-party ntfy server. */
+  includeReply: z.boolean().default(true),
+  /** Per-request delivery timeout. */
+  timeoutMs: z.number().int().min(1000).max(60_000).default(10_000),
+  ntfy: z
+    .object({
+      server: z.string().default('https://ntfy.sh'),
+      topic: z.string(),
+      /** Access token for a protected topic (sent as a Bearer token). */
+      token: z.string().optional(),
+    })
+    .optional(),
+  /** Which routine (scheduled chat) outcomes notify. */
+  events: z
+    .object({
+      routineSucceeded: z.boolean().default(true),
+      routineFailed: z.boolean().default(true),
+      routineNeedsApproval: z.boolean().default(true),
+    })
+    .default({}),
+});
+
+export type TNotificationsConfig = z.infer<typeof notificationsSchema>;
+/** The block as written in the YAML, before defaults apply (`AppConfig.config` holds this shape). */
+export type TNotificationsConfigInput = z.input<typeof notificationsSchema>;
+
 export const summarizationTriggerSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('token_ratio'),
@@ -3056,6 +3093,7 @@ export const configSchema = z.object({
   webSearch: webSearchSchema.optional(),
   langfuse: langfuseConfigSchema.optional(),
   memory: memorySchema.optional(),
+  notifications: notificationsSchema.optional(),
   summarization: summarizationConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
   secureImageLinks: z.boolean().optional(),

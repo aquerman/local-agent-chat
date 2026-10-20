@@ -86,3 +86,15 @@ mcpServers:
 # from the Tools menu. For previews without the internet, set in .env:
 #   SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080
 # (port = PORT). See CLAUDE.md "Artifacts offline"; React previews still need codesandbox.io.
+
+# Roadmap 15, phone notifications: ntfy push when a routine (scheduled chat) finishes, fails or
+# waits for approval. Values come from .env so no topic or address lands in git; with NTFY_TOPIC
+# unset nothing is sent. Phone setup: README, "Phone notifications".
+notifications:
+  enabled: true
+  publicBaseUrl: '${BENNYCHAT_PUBLIC_URL}' # tap opens <url>/c/<conversation>
+  includeReply: true # false keeps chat text off the ntfy server (generic body instead)
+  ntfy:
+    server: '${NTFY_SERVER}' # unset = https://ntfy.sh
+    topic: '${NTFY_TOPIC}'
+    token: '${NTFY_TOKEN}' # optional, for a protected topic

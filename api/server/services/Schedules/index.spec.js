@@ -5,6 +5,7 @@ const mockCreateSchedulesService = jest.fn(() => ({
 
 jest.mock('@librechat/api', () => ({
   createSchedulesService: (...args) => mockCreateSchedulesService(...args),
+  createRoutineNotifications: jest.fn(() => jest.fn()),
 }));
 jest.mock('mongoose', () => ({ models: {} }));
 jest.mock('~/server/services/Config/app', () => ({ getAppConfig: jest.fn() }));
