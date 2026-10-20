@@ -50,6 +50,10 @@ from a phone over Tailscale.
   without the internet: BennyChat serves the preview bundler, Tailwind and the code editor itself.
   Set `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env` to switch it on. React
   previews still load their bundler from codesandbox.io.
+- **Memory.** After each message, the local model notes lasting facts you mention: who you are, your
+  preferences, your current projects and any standing instructions. It keeps them in a short memory
+  (1.5k tokens) that every new chat sees. You can view, edit or delete entries, or switch memory off,
+  under Customize > Memories.
 
 ## Running it (Windows)
 

@@ -244,6 +244,35 @@ syncs conflict only here.
 - Verified 2026-10-20 in the cloud test rig (Chromium; every non-localhost request aborted and
   unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid and the Code tab rendered with
   zero external requests. React stopped at the bundler.
+## Memory
+
+- Upstream memory, switched on in the `memory:` section of `bennychat.yaml` (roadmap 7). After each
+  user turn a memory agent (an ephemeral agent on provider `Benner`, model `local`) reads the last
+  `messageWindowSize` messages and calls `set_memory` / `delete_memory`. Keys are limited to
+  `about_user`, `preferences`, `projects`, `instructions`, 1500 tokens in total. Each key holds one value
+  and `set_memory` overwrites it, so the agent's `instructions` tell it to merge the new fact into what
+  the key already holds.
+- Thinking is off for it: `model_parameters.reasoning_effort: 'none'` becomes
+  `chat_template_kwargs.enable_thinking: false` through the llama_cpp_budget translation (see
+  "Thinking mode").
+- Timing: upstream starts the memory request at the same time as the reply
+  (`runMemory` in `api/server/controllers/agents/client.js`). There is no setting to run it after the
+  reply. At the end of the turn it waits at most 3 s for the "memory updated" chip, and a slower
+  write is still saved. llama-server's default `--parallel` (auto) gives 4 slots sharing one KV cache,
+  so the memory request runs beside the reply, not in front of it. Do not start llama-server with
+  `-np 1`. Each turn costs one extra non-streaming request: about 700 prompt tokens, under 50 output tokens.
+- Every chat's system prompt starts with "Persistent memory…" followed by the saved entries. When a
+  memory changes, the next turn of an open chat has a different prompt prefix and gets processed
+  again from the start.
+- Users see and edit memories under Customize > Memories (filter, add, edit, delete, usage %, "Use
+  memory" toggle). To switch extraction off but keep memories readable and editable, set
+  `memory.agent.enabled: false`. `memory.disabled: true` turns the whole feature off.
+- Verified 2026-10-20 in the cloud rig against Qwen3-1.7B: the request reaches llama-server with
+  `enable_thinking: false`, `max_tokens: 400` and only the two memory tools. A stated preference was saved
+  and shown in the panel. A new chat had it in its system prompt. Manual add and delete through
+  `/api/memories` also worked. The 1.7B has limits: it put a preference under `about_user` in the first
+  person, and once a key already held a value it described the new fact in text instead of calling
+  `set_memory` (4 of 4 tries). Merging into an existing key still needs to be checked on Qwen3.5-9B.
 
 ## Keyboard shortcuts
 

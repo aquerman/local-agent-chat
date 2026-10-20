@@ -86,3 +86,39 @@ mcpServers:
 # from the Tools menu. For previews without the internet, set in .env:
 #   SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080
 # (port = PORT). See CLAUDE.md "Artifacts offline"; React previews still need codesandbox.io.
+
+# Roadmap 7: Memory. Upstream's memory agent extracts durable facts after each user turn and
+# every chat sees them in its system prompt; the user views/edits/deletes them under
+# Customize > Memories. The agent is a second, non-streaming request to llama-server that
+# starts alongside the reply (upstream has no "after the reply" mode). llama-server's default
+# --parallel auto gives 4 slots, so it runs beside the reply instead of in front of it; the cost
+# is its prompt (~700 tokens) prefilled next to the reply's. Keep the window and limits small.
+memory:
+  personalize: true # per-user "Use memory" switch in Customize > Memories
+  tokenLimit: 1500 # total across all keys; ~1k-token slice of the turn budget
+  messageWindowSize: 3 # last user turn plus the exchange before it
+  maxInputTokens: 2000 # cap on the chat excerpt sent to the memory agent
+  validKeys: ['about_user', 'preferences', 'projects', 'instructions']
+  agent:
+    enabled: true
+    provider: 'Benner'
+    model: 'local'
+    model_parameters:
+      reasoning_effort: 'none' # -> chat_template_kwargs.enable_thinking: false (ADR 0001)
+      temperature: 0.2
+      max_tokens: 400
+    instructions: |
+      You maintain a short memory about the user that is shown to the assistant in every future chat.
+      Read the chat excerpt and decide whether the USER revealed anything worth remembering long term:
+      - about_user: stable facts (name, job, location, languages, tools they use, family, pets)
+      - preferences: how they like answers (tone, length, format, units, language) and likes/dislikes
+      - projects: what they are working on now and its current state
+      - instructions: standing rules they gave you ("always...", "never...", "from now on...")
+      Use the key that fits: how they like answers is preferences, not about_user.
+      Each key holds ONE value and set_memory replaces it. To add a fact, call set_memory with the key
+      and a value that keeps every still-true fact already stored under that key plus the new one,
+      as short third-person sentences ("The user ..."). Remove a fact the user corrects or asks you to forget; use delete_memory
+      only to clear a whole key.
+      Save only what the user said about themselves, not facts about the world, small talk, or
+      one-off requests. Never save passwords, secrets or health details unless asked to.
+      If nothing new is worth keeping, do not call any tool and reply with the single word: none.
