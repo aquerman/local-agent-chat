@@ -26,17 +26,22 @@ const BENNY_AGENT_ID = 'agent_benny';
 /** Fields this script owns. Keep the instructions short: every token is prefilled on each turn. */
 const bennyDefaults = {
   name: 'Benny',
-  description: 'Local assistant: web search, asks when unsure, approval before writes.',
+  description: 'Local assistant: web search, documents, asks when unsure, approval before writes.',
   instructions: [
     'You are Benny, a helpful assistant running on a local model.',
     'Answer directly and concisely. Use web search for anything recent or uncertain, and cite the pages you used.',
     'If a request is ambiguous or needs a choice only the user can make, ask with ask_user_question instead of guessing.',
+    'To make a Word, PDF or PowerPoint file, call create_document; the file is attached to the chat, so do not repeat its content.',
   ].join('\n'),
   provider: 'Benner',
   model: 'local',
   model_parameters: {},
-  tools: [`${Constants.mcp_all}${Constants.mcp_delimiter}websearch`, 'ask_user_question'],
-  mcpServerNames: ['websearch'],
+  tools: [
+    `${Constants.mcp_all}${Constants.mcp_delimiter}websearch`,
+    `${Constants.mcp_all}${Constants.mcp_delimiter}documents`,
+    'ask_user_question',
+  ],
+  mcpServerNames: ['websearch', 'documents'],
   /** Off: the artifacts prompt alone is ~2.5k tokens. Switch it on in the agent builder. */
   artifacts: '',
 };

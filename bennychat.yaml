@@ -111,6 +111,9 @@ endpoints:
         # Roadmap 4: Todoist's one read tool without a read verb. Its writes (add-*, update-*,
         # complete-tasks, delete-object, ...) match nothing here, so they ask.
         - 'user-info_mcp_todoist'
+        # Roadmap 5a: documents only renders a file into this chat (like Claude Desktop's file
+        # creation), so create_document / append_section run without asking.
+        - '*_mcp_documents'
       reason: 'Benny wants to run {tool}. It can change data outside this chat.'
     # Paused runs (approval or Ask User) wait up to a day in MongoDB, then expire.
     checkpointer:

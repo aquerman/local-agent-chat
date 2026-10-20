@@ -351,6 +351,11 @@ syncs conflict only here.
   stores them through `processCodeOutput` with a prepared buffer, the same pipeline as code-interpreter
   outputs. That gives a download chip, per-conversation filename reuse (an append updates the same file)
   and the upstream office HTML preview card. Files over the endpoint upload limit are dropped with a warning.
+- The preview card renders the office HTML through the artifacts bundler, so offline it needs
+  `SANDPACK_STATIC_BUNDLER_URL` (see "Artifacts offline"); the download chip works regardless.
+- Benny (`config/seed-benny.js`) lists the server; an existing Benny gets it with
+  `npm run seed-benny -- --reset` or in the Agent Builder. `endpoints.agents.toolApproval.allow` has
+  `*_mcp_documents`: making a file in the chat does not ask for approval, as in Claude Desktop.
 - Wired in `bennychat.yaml` under `mcpServers.documents` (`alwaysOn`, `fileOutputs`). Tests:
   `cd packages/documents && npx jest` (PDF tests need a browser: Edge on Windows, else set
   `DOCUMENTS_BROWSER_PATH`); typecheck with `npx tsc --noEmit` there.
