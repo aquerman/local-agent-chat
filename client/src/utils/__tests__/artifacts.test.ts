@@ -3,6 +3,9 @@ import type { ToolArtifactType } from '../artifacts';
 import {
   artifactRowKind,
   buildSandpackOptions,
+  resolveStaticBundler,
+  isSelfHostedPreview,
+  TAILWIND_SELF_HOSTED,
   getArtifactDownloadFilename,
   getArtifactFilename,
   getDependencies,
@@ -130,6 +133,67 @@ describe('buildSandpackOptions', () => {
   it('returns base options without bundlerURL when no config is provided', () => {
     const options = buildSandpackOptions('react-ts');
     expect(options?.bundlerURL).toBeUndefined();
+  });
+
+  it('uses the self-hosted Tailwind with a self-hosted static bundler', () => {
+    const config = { staticBundlerURL: 'http://preview.localhost:3080' };
+    const options = buildSandpackOptions('static', config, 'localhost');
+    expect(options?.bundlerURL).toBe('http://preview.localhost:3080');
+    expect(options?.externalResources).toEqual([TAILWIND_SELF_HOSTED]);
+  });
+
+  it('keeps the CDN Tailwind and hosted bundler for React even with a self-hosted static one', () => {
+    const config = { staticBundlerURL: 'http://preview.localhost:3080' };
+    const options = buildSandpackOptions('react-ts', config, 'localhost');
+    expect(options?.bundlerURL).toBeUndefined();
+    expect(options?.externalResources).toEqual([TAILWIND_CDN]);
+  });
+
+  it('falls back to the hosted static bundler when the page is opened from another device', () => {
+    const config = { staticBundlerURL: 'http://preview.localhost:3080' };
+    const options = buildSandpackOptions('static', config, 'pc.tailnet.example');
+    expect(options?.bundlerURL).toBeUndefined();
+    expect(options?.externalResources).toEqual([TAILWIND_CDN]);
+  });
+});
+
+describe('isSelfHostedPreview', () => {
+  const config = { staticBundlerURL: 'http://preview.localhost:3080' };
+
+  it('is true only for static previews on the self-hosted bundler', () => {
+    expect(isSelfHostedPreview('static', config, 'localhost')).toBe(true);
+    expect(isSelfHostedPreview('react-ts', config, 'localhost')).toBe(false);
+    expect(isSelfHostedPreview('static', config, 'chat.example.com')).toBe(false);
+    expect(isSelfHostedPreview('static', undefined, 'localhost')).toBe(false);
+  });
+});
+
+describe('resolveStaticBundler', () => {
+  it.each([
+    ['localhost', true],
+    ['127.0.0.1', true],
+    ['[::1]', true],
+    ['app.localhost', true],
+    ['192.168.1.20', false],
+    ['chat.example.com', false],
+  ])('treats a *.localhost bundler opened from %s as self-hosted: %s', (page, selfHosted) => {
+    expect(resolveStaticBundler('http://preview.localhost:3080', page)).toEqual(
+      selfHosted
+        ? { bundlerURL: 'http://preview.localhost:3080', selfHosted: true }
+        : { selfHosted: false },
+    );
+  });
+
+  it('passes other bundler URLs through unchanged', () => {
+    expect(resolveStaticBundler('https://static.example.com', 'chat.example.com')).toEqual({
+      bundlerURL: 'https://static.example.com',
+      selfHosted: false,
+    });
+    expect(resolveStaticBundler('not a url', 'localhost')).toEqual({
+      bundlerURL: 'not a url',
+      selfHosted: false,
+    });
+    expect(resolveStaticBundler(undefined, 'localhost')).toEqual({ selfHosted: false });
   });
 });
 

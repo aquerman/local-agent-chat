@@ -25,6 +25,7 @@ const {
   ErrorController,
   memoryDiagnostics,
   createSecurityHeaders,
+  createStaticBundlerMiddleware,
   performStartupChecks,
   handleJsonParseError,
   GenerationJobManager,
@@ -203,6 +204,16 @@ const startServer = async () => {
 
   app.disable('x-powered-by');
   app.set('trust proxy', trusted_proxy);
+
+  /* Fork: serves Sandpack's static bundler on `<id>-preview.localhost` hosts; ahead of the
+   * security headers because the app's origin frames it. See CLAUDE.md "Artifacts offline". */
+  const staticBundler = createStaticBundlerMiddleware({
+    bundlerURL: process.env.SANDPACK_STATIC_BUNDLER_URL,
+    root: path.join(require('~/config/paths').dist, 'artifacts-preview'),
+  });
+  if (staticBundler) {
+    app.use(staticBundler);
+  }
 
   /* Registered ahead of every route so health checks carry the headers too. */
   const securityHeaders = createSecurityHeaders();
