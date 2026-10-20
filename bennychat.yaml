@@ -1,0 +1,55 @@
+# BennyChat configuration: LibreChat wired to a local llama-server (aquerman/local-llm).
+#
+# This is the fork's tracked config. librechat.yaml stays git-ignored for machine-specific edits:
+# either point LibreChat at this file (CONFIG_PATH=bennychat.yaml in .env) or copy it to
+# librechat.yaml. Each section names the roadmap item it belongs to, so a feature can be found
+# and switched off again in one place. Upstream's full reference is librechat.example.yaml.
+version: 1.3.17
+
+cache: true
+
+interface:
+  # Claude Desktop-style sidebar and composer (fork option, see CLAUDE.md "Minimal layout").
+  layout: minimal
+
+endpoints:
+  # LibreChat's SSRF guard blocks loopback unless it is listed here as host:port.
+  allowedAddresses:
+    - '127.0.0.1:8080'
+  custom:
+    # local-llm's llama-server (../local-llm/scripts/start-server.ps1 serves it as model `local`).
+    - name: 'Benner'
+      apiKey: 'local' # llama-server ignores it, but it must not be empty
+      baseURL: 'http://127.0.0.1:8080/v1'
+      models:
+        default: ['local']
+        fetch: false
+      modelDisplayLabel: 'local-llm'
+      titleConvo: true
+      titleModel: 'current_model'
+      customParams:
+        # Thinking pill -> llama-server's enable_thinking / thinking_budget_tokens (ADR 0001).
+        reasoningFormat: 'llama_cpp_budget'
+        thinkingBudgets:
+          low: 512
+          medium: 2048
+          high: 6144
+
+fileConfig:
+  endpoints:
+    custom:
+      # llama-server rejects OpenAI `file` parts, so PDFs are parsed to text on upload.
+      defaultLLMDeliveryPath:
+        overrides:
+          application/pdf: text
+
+mcpServers:
+  # Web search (packages/websearch): DuckDuckGo search + page fetch, attached to every chat.
+  websearch:
+    type: stdio
+    command: node
+    args: ['packages/websearch/dist/index.cjs']
+    alwaysOn: true
+    env:
+      WEBSEARCH_MAX_CHARS: '20000'
+      WEBSEARCH_TIMEOUT_MS: '15000'

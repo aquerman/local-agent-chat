@@ -49,6 +49,9 @@ syncs conflict only here.
   `local-llm` (model alias `local`, from `--alias local` in `../local-llm/scripts/start-server.ps1`).
   Per-endpoint keys elsewhere in the YAML (`fileConfig.endpoints`) match the `name`, or the
   generic `custom` key, never the display label.
+- `bennychat.yaml` (tracked) is the fork's full LibreChat config, one commented section per roadmap
+  feature. Use it with `CONFIG_PATH=bennychat.yaml` in `.env`, or copy it over `librechat.yaml`.
+  New features are switched on there, not in upstream's `librechat.example.yaml`.
 - `gh` default repo is set to `aquerman/local-agent-chat`. Still pass `--repo aquerman/local-agent-chat`
   to `gh pr create`; never open a pull request against `LibreChat-AI/LibreChat` unless asked.
 
