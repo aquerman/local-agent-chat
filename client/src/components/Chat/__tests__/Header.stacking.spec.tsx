@@ -20,7 +20,7 @@ jest.mock('librechat-data-provider', () => ({
   Permissions: { USE: 'use' },
 }));
 jest.mock('~/data-provider', () => ({ useGetStartupConfig: () => ({ data: undefined }) }));
-jest.mock('~/hooks', () => ({ useHasAccess: () => false }));
+jest.mock('~/hooks', () => ({ useHasAccess: () => false, useMinimalLayout: () => false }));
 jest.mock('~/store', () => ({
   __esModule: true,
   default: {

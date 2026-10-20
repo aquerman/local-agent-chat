@@ -2,6 +2,8 @@ import { memo } from 'react';
 import type { NavLink } from '~/common';
 import SidePanelNav from '~/components/SidePanel/Nav';
 import ExpandedPanel from './ExpandedPanel';
+import { useMinimalLayout } from '~/hooks';
+import MinimalPanel from './MinimalPanel';
 import { cn } from '~/utils';
 
 function Sidebar({
@@ -27,31 +29,43 @@ function Sidebar({
   onResizeStart: (e: React.MouseEvent) => void;
   onResizeKeyboard: (direction: 'shrink' | 'grow') => void;
 }) {
+  const minimal = useMinimalLayout();
+  const showMinimalPanel = minimal && expanded;
+
   return (
     <>
       <div className="flex h-full w-full overflow-hidden">
-        <ExpandedPanel
-          links={links}
-          expanded={expanded}
-          onCollapse={onCollapse}
-          onExpand={onExpand}
-          onLeaveInsights={onLeaveInsights}
-        />
-        <nav
-          className={cn(
-            /** The resize separator to the right is transparent until hovered, so
-             *  the panel has no resting right edge. That is deliberate in the
-             *  standard themes, where `surface-primary-alt` carries the boundary
-             *  on its own; in high contrast both sides are the same pure white or
-             *  pure black, so the edge has to be drawn. */
-            'min-h-0 flex-1 overflow-hidden bg-surface-primary-alt high-contrast:border-r high-contrast:border-border-light',
-            expanded ? 'opacity-100' : 'pointer-events-none opacity-0',
-          )}
-          style={{ transition: expanded ? 'opacity 200ms ease 80ms' : 'opacity 150ms ease' }}
-          aria-hidden={!expanded}
-        >
-          <SidePanelNav links={links} />
-        </nav>
+        {showMinimalPanel ? (
+          <MinimalPanel links={links} onCollapse={onCollapse} onLeaveInsights={onLeaveInsights}>
+            <SidePanelNav links={links} />
+          </MinimalPanel>
+        ) : (
+          <>
+            <ExpandedPanel
+              links={links}
+              expanded={expanded}
+              compact={minimal}
+              onCollapse={onCollapse}
+              onExpand={onExpand}
+              onLeaveInsights={onLeaveInsights}
+            />
+            <nav
+              className={cn(
+                /** The resize separator to the right is transparent until hovered, so
+                 *  the panel has no resting right edge. That is deliberate in the
+                 *  standard themes, where `surface-primary-alt` carries the boundary
+                 *  on its own; in high contrast both sides are the same pure white or
+                 *  pure black, so the edge has to be drawn. */
+                'min-h-0 flex-1 overflow-hidden bg-surface-primary-alt high-contrast:border-r high-contrast:border-border-light',
+                expanded ? 'opacity-100' : 'pointer-events-none opacity-0',
+              )}
+              style={{ transition: expanded ? 'opacity 200ms ease 80ms' : 'opacity 150ms ease' }}
+              aria-hidden={!expanded}
+            >
+              <SidePanelNav links={links} />
+            </nav>
+          </>
+        )}
       </div>
       <div
         role="separator"

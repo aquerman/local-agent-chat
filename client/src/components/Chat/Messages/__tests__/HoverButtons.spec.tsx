@@ -16,7 +16,11 @@ import {
 } from '~/Providers/MessagesViewContext';
 import { hasCopyableText } from '~/hooks/Messages/useCopyToClipboard';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
+import useMinimalLayout from '~/hooks/useMinimalLayout';
 import store from '~/store';
+
+/** Stands in for the startup config's `interface.layout`, which the tests otherwise leave unloaded (classic). */
+jest.mock('~/hooks/useMinimalLayout', () => ({ __esModule: true, default: jest.fn(() => false) }));
 
 const conversation = {
   conversationId: 'convo-1',
@@ -565,5 +569,30 @@ describe('HoverButtons feedback affordance', () => {
     expect(screen.queryByTitle('Love this')).toBeNull();
     expect(screen.queryByTitle('Needs improvement')).toBeNull();
     expect(screen.getByTestId('copy-response-button')).toBeInTheDocument();
+  });
+});
+
+describe('HoverButtons layout', () => {
+  const assistantMessage = {
+    messageId: 'assistant-1',
+    conversationId: 'convo-1',
+    parentMessageId: 'user-1',
+    isCreatedByUser: false,
+    text: 'Once upon a time',
+  } as TMessage;
+
+  afterEach(() => {
+    jest.mocked(useMinimalLayout).mockReturnValue(false);
+  });
+
+  it('keeps the latest reply actions on screen in the classic layout', () => {
+    renderHoverButtons({ isSubmitting: false, message: assistantMessage, isLast: true });
+    expect(screen.getByTestId('copy-response-button')).not.toHaveClass('group-hover:opacity-100');
+  });
+
+  it('reveals the latest reply actions on hover in the minimal layout', () => {
+    jest.mocked(useMinimalLayout).mockReturnValue(true);
+    renderHoverButtons({ isSubmitting: false, message: assistantMessage, isLast: true });
+    expect(screen.getByTestId('copy-response-button')).toHaveClass('group-hover:opacity-100');
   });
 });

@@ -20,6 +20,7 @@ jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
   useNavigateToConvo: () => ({ navigateToConvo: jest.fn() }),
   useShiftKey: () => false,
+  useMinimalLayout: () => false,
 }));
 
 jest.mock('~/data-provider', () => ({

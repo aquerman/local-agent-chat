@@ -22,4 +22,6 @@ export interface SelectedValues {
 
 export interface ModelSelectorProps {
   startupConfig: TStartupConfig | undefined;
+  /** A borderless, icon-free trigger for the composer's action row. */
+  compact?: boolean;
 }

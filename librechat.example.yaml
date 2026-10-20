@@ -247,6 +247,9 @@ interface:
   marketplace:
     use: false
   fileCitations: true
+  # Screen layout (default: classic). `minimal` keeps the sidebar to text rows,
+  # folds header actions into one menu, hides the footer and shows reply actions on hover.
+  # layout: minimal
   # Show the thumbs up/thumbs down feedback buttons on responses (default: true)
   feedback: true
   # Conversation trace viewer: a waterfall of the model calls and tool spans behind

@@ -17,6 +17,7 @@ import {
   useSubmitMessage,
   useFocusChatEffect,
   useCodeWorkspace,
+  useMinimalLayout,
 } from '~/hooks';
 import {
   cn,
@@ -37,6 +38,7 @@ import {
   PendingToolApprovalButton,
   PendingToolApprovalPanel,
 } from '~/components/Chat/approval/Review';
+import ModelSelector from '~/components/Chat/Menus/Endpoints/ModelSelector';
 import PendingManualSkillsChips from './PendingManualSkillsChips';
 import usePastedTextEdit from '~/hooks/Files/usePastedTextEdit';
 import useAskAnswerMode from '~/hooks/Input/useAskAnswerMode';
@@ -186,6 +188,8 @@ const ChatForm = memo(function ChatForm({
   } = useAddedChatContext();
   const assistantMap = useAssistantsMapContext();
   const { data: startupConfig } = useGetStartupConfig();
+  /** The minimal layout moves the model selector from the header to the action row. */
+  const minimalLayout = useMinimalLayout();
 
   const endpoint = useMemo(
     () => conversation?.endpointType ?? conversation?.endpoint,
@@ -897,6 +901,11 @@ const ChatForm = memo(function ChatForm({
                       />
                     </div>
                   )}
+                {minimalLayout && index === 0 && (
+                  <div className="min-w-0 shrink">
+                    <ModelSelector startupConfig={startupConfig} compact />
+                  </div>
+                )}
                 <div className={cn('shrink-0', isRTL ? 'mr-auto' : 'ml-auto')}>
                   {isSubmitting &&
                   (showStopButton || steering.duringRunActive) &&

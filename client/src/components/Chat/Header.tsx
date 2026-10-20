@@ -11,13 +11,13 @@ import { OpenSidebar, PresetsMenu, NewChat, HeaderMenu } from './Menus';
 import { TemporaryChat, TemporaryChatIndicator } from './TemporaryChat';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
 import { BackgroundTasksButton } from './BackgroundTasks';
+import { useHasAccess, useMinimalLayout } from '~/hooks';
 import { TraceButton, useTraceControl } from './Trace';
 import { useGetStartupConfig } from '~/data-provider';
 import ExportAndShareMenu from './ExportAndShareMenu';
 import SubagentThreadLink from './SubagentThreadLink';
 import BookmarkMenu from './Menus/BookmarkMenu';
 import AddMultiConvo from './AddMultiConvo';
-import { useHasAccess } from '~/hooks';
 import { cn } from '~/utils';
 import store from '~/store';
 
@@ -46,6 +46,10 @@ function Header({
    *  conversation has no id in the route yet, so absence counts as new too. */
   const { conversationId: routeConversationId } = useParams();
   const isNewChat = routeConversationId == null || routeConversationId === Constants.NEW_CONVO;
+
+  /** The minimal layout moves the model selector into the composer and folds every
+   *  secondary action into the overflow menu at all breakpoints. */
+  const minimal = useMinimalLayout();
 
   const interfaceConfig = useMemo(
     () => startupConfig?.interface ?? defaultInterface,
@@ -95,16 +99,17 @@ function Header({
         {parentConversationId != null && (
           <SubagentThreadLink threadId={parentConversationId} labelClassName="hidden lg:inline" />
         )}
-        {!readOnly && <ModelSelector startupConfig={startupConfig} />}
-        {!readOnly && interfaceConfig.presets === true && interfaceConfig.modelSelect === true && (
-          <PresetsMenu />
-        )}
-        {hasAccessToBookmarks === true && (
+        {!readOnly && !minimal && <ModelSelector startupConfig={startupConfig} />}
+        {!readOnly &&
+          !minimal &&
+          interfaceConfig.presets === true &&
+          interfaceConfig.modelSelect === true && <PresetsMenu />}
+        {!minimal && hasAccessToBookmarks === true && (
           <div className="hidden items-center md:flex">
             <BookmarkMenu />
           </div>
         )}
-        {hasAccessToMultiConvo === true && (
+        {!minimal && hasAccessToMultiConvo === true && (
           <div className="hidden items-center md:flex">
             <AddMultiConvo />
           </div>
@@ -121,12 +126,20 @@ function Header({
             isSubmitting={isSubmitting}
           />
         )}
-        <HeaderMenu startupConfig={startupConfig} trace={trace} className="md:hidden" />
-        <div className="hidden items-center gap-2 md:flex">
-          {trace.show && <TraceButton onClick={trace.open} />}
-          <ExportAndShareMenu isSharedButtonEnabled={startupConfig?.sharedLinksEnabled ?? false} />
-          {hasAccessToTemporaryChat === true && <TemporaryChat />}
-        </div>
+        <HeaderMenu
+          startupConfig={startupConfig}
+          trace={trace}
+          className={minimal ? undefined : 'md:hidden'}
+        />
+        {!minimal && (
+          <div className="hidden items-center gap-2 md:flex">
+            {trace.show && <TraceButton onClick={trace.open} />}
+            <ExportAndShareMenu
+              isSharedButtonEnabled={startupConfig?.sharedLinksEnabled ?? false}
+            />
+            {hasAccessToTemporaryChat === true && <TemporaryChat />}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -82,6 +82,15 @@ syncs conflict only here.
   `fetch` unprompted in that exchange; `fetch` itself is verified over stdio. With a 1 ms timeout
   both tools return their `isError` text instead of throwing.
 
+## Minimal layout
+
+- `interface.layout: minimal` in `librechat.yaml` (default `classic`) gives a Claude Desktop-style
+  screen: the desktop sidebar shows text rows (New chat, Chats, Agents, a Customize menu for the other
+  panels, the account row) instead of the icon rail; the model selector sits next to Send; header
+  actions live in the "…" menu at every width; the welcome-screen disclaimer is hidden; reply actions
+  appear on hover, the latest reply included. Conversation rows drop their endpoint icon.
+- Read it in the client with `useMinimalLayout()`. The mobile drawer is unchanged.
+
 ## Fork workflow (overrides upstream "Branching and Pull Requests")
 
 - `origin` has only `main`. Upstream's `dev`/`canary` rules describe LibreChat's own repo, not this

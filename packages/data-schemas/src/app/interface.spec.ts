@@ -114,6 +114,30 @@ describe('loadDefaultInterface', () => {
     expect(interfaceConfig?.buildInfo).toBe(true);
   });
 
+  it('uses the classic layout when not configured', async () => {
+    const interfaceConfig = await loadDefaultInterface({
+      config: {},
+      configDefaults: getConfigDefaults(),
+    });
+
+    expect(interfaceConfig?.layout).toBe('classic');
+  });
+
+  it('preserves a configured minimal layout', async () => {
+    const config: Partial<TCustomConfig> = {
+      interface: {
+        layout: 'minimal',
+      },
+    };
+
+    const interfaceConfig = await loadDefaultInterface({
+      config,
+      configDefaults: getConfigDefaults(),
+    });
+
+    expect(interfaceConfig?.layout).toBe('minimal');
+  });
+
   it('enables response feedback by default', async () => {
     const interfaceConfig = await loadDefaultInterface({
       config: {},
