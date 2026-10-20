@@ -122,9 +122,9 @@ function appendEscalationButton(surface: 'bubble' | 'queued', active = false) {
 describe('binding resolution helpers', () => {
   it('falls back to the default binding when there is no override', () => {
     const binding = effectiveBinding('newChat');
-    expect(binding).toMatchObject({ ctrl: true, shift: true, key: 'O' });
-    expect(getShortcutDisplay('newChat')).toBe('Ctrl+Shift+O');
-    expect(getShortcutAriaKey('newChat')).toBe('Control+Shift+O');
+    expect(binding).toMatchObject({ ctrl: true, shift: false, key: 'N' });
+    expect(getShortcutDisplay('newChat')).toBe('Ctrl+N');
+    expect(getShortcutAriaKey('newChat')).toBe('Control+N');
   });
 
   it('honors a stored custom binding for the current platform', () => {
@@ -165,21 +165,21 @@ describe('binding resolution helpers', () => {
 
   it("does not treat an other-platform edit's copied default as a custom claim", () => {
     const overrides = {
-      newChat: { mac: 'Meta+Alt+N', other: 'Control+Shift+O' },
-      toggleSidebar: { mac: 'Meta+Shift+O', other: 'Control+Shift+O' },
+      newChat: { mac: 'Meta+Alt+N', other: 'Control+N' },
+      toggleSidebar: { mac: 'Meta+N', other: 'Control+N' },
     };
 
     expect(effectiveBinding('toggleSidebar', overrides)).toMatchObject({
       ctrl: true,
-      shift: true,
-      key: 'O',
+      shift: false,
+      key: 'N',
     });
     expect(effectiveBinding('newChat', overrides)).toBeNull();
   });
 
   it('detects whether an override diverges from the default', () => {
     expect(isOverridden('newChat', undefined)).toBe(false);
-    expect(isOverridden('newChat', { mac: 'Meta+Shift+O', other: 'Control+Shift+O' })).toBe(false);
+    expect(isOverridden('newChat', { mac: 'Meta+N', other: 'Control+N' })).toBe(false);
     expect(isOverridden('newChat', { mac: null, other: null })).toBe(true);
     expect(isOverridden('newChat', { mac: 'Meta+Shift+P', other: 'Control+Shift+P' })).toBe(true);
   });
@@ -266,6 +266,17 @@ describe('global shortcut dispatch', () => {
     const event = dispatchKey({ key: 's', ctrlKey: true, shiftKey: true }, input);
 
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('claims Ctrl+N for a new chat while typing in the composer', () => {
+    renderHarness();
+    const textarea = document.createElement('textarea');
+    textarea.id = 'prompt-textarea';
+    document.body.appendChild(textarea);
+
+    const event = dispatchKey({ key: 'n', ctrlKey: true }, textarea);
+
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it('ignores shortcuts while focus is inside an open menu overlay', () => {

@@ -45,10 +45,10 @@ export const shortcutDefinitions = {
   newChat: {
     labelKey: 'com_ui_new_chat',
     groupKey: 'com_shortcut_group_general',
-    displayMac: '⌘ ⇧ O',
-    displayOther: 'Ctrl+Shift+O',
-    ariaMac: 'Meta+Shift+O',
-    ariaOther: 'Control+Shift+O',
+    displayMac: '⌘ N',
+    displayOther: 'Ctrl+N',
+    ariaMac: 'Meta+N',
+    ariaOther: 'Control+N',
   },
   focusChat: {
     labelKey: 'com_shortcut_focus_chat_input',
@@ -295,6 +295,7 @@ export type ShortcutActionId = keyof typeof shortcutDefinitions;
 export const EDITING_ALLOWED_SHORTCUTS: ReadonlySet<ShortcutActionId> = new Set([
   'focusChat',
   'focusSearch',
+  'newChat',
   'showShortcuts',
   'submitMessage',
   'escalateSteer',
