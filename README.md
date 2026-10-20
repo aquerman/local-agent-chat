@@ -33,6 +33,9 @@ from a phone over Tailscale.
 - **Web search.** A small built-in MCP server (`packages/websearch`) gives the model `search`
   (DuckDuckGo, no API key) and `fetch` (a web page as readable text). With `alwaysOn: true` on the
   server in `librechat.yaml` it is attached to every chat, so there is nothing to switch on.
+  Pages that only fill in with JavaScript are read again in a headless copy of the Microsoft Edge
+  already installed on Windows (no browser download); `WEBSEARCH_RENDER` (`auto`, `always`, `off`)
+  and `WEBSEARCH_BROWSER_PATH` in the server's `env` block change that.
 - **Search past chats.** LibreChat's sidebar search, backed by a local Meilisearch that
   `scripts\start-all.bat` starts from `bin\meilisearch.exe` (optional, see below).
 

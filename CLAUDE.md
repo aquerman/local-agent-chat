@@ -119,6 +119,14 @@ syncs conflict only here.
   (`packages/api/src/mcp/utils.ts`). Agents still list their own servers. Without the flag it is
   enabled per chat from the MCP selector in the input badge row. Debug the server alone with
   `npx @modelcontextprotocol/inspector node packages/websearch/dist/index.cjs`.
+- JS rendering (roadmap 2.1): with `WEBSEARCH_RENDER=auto` (default) a static page under ~200 chars
+  of text is re-read in headless Chromium via `playwright-core` (a runtime dependency kept out of the
+  bundle); `always` renders every page, `off` never does. No `render` tool argument, like Claude's
+  single web_fetch. Browser: `WEBSEARCH_BROWSER_PATH`, else Edge (`msedge` channel), Chrome, then
+  Playwright's Chromium; none → static text plus a note. All browser traffic goes through a
+  per-render guarded proxy (`src/proxy.ts`) that dials only checked public addresses and enforces
+  `WEBSEARCH_MAX_BYTES`. Render tests use `PLAYWRIGHT_BROWSERS_PATH`/`WEBSEARCH_BROWSER_PATH` and
+  skip without a Chromium.
 - Tests: `cd packages/websearch && npx jest`; typecheck with `npx tsc --noEmit` there.
 - Verified 2026-10-01 with Qwen2.5-7B-Instruct Q4_K_M (`--jinja`): asked for today's news, the
   model called `search` with a sensible query and answered from the results. It did not chain to

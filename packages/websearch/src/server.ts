@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { PageContent, FetchFn } from '~/fetch';
+import type { PageContent, RenderSetup, FetchFn } from '~/fetch';
+import type { AddressFilter, Resolver } from '~/guard';
 import type { SearchResult } from '~/search';
 import type { Limits } from '~/limits';
-import type { Resolver } from '~/guard';
 import { WebSearchError } from '~/errors';
 import { fetchPage } from '~/fetch';
 import { search } from '~/search';
@@ -12,7 +12,9 @@ import { search } from '~/search';
 export interface ServerOptions {
   fetch?: FetchFn;
   resolve?: Resolver;
+  isBlocked?: AddressFilter;
   limits: Limits;
+  render?: RenderSetup;
 }
 
 const SEARCH_DESCRIPTION =
@@ -66,7 +68,7 @@ export function formatPage(page: PageContent): string {
 export function createServer(options: ServerOptions): McpServer {
   const { limits } = options;
   const fetchFn = options.fetch ?? globalThis.fetch;
-  const { resolve } = options;
+  const { resolve, isBlocked, render } = options;
   const server = new McpServer({ name: 'librechat-websearch', version: '0.1.0' });
 
   server.registerTool(
@@ -113,7 +115,14 @@ export function createServer(options: ServerOptions): McpServer {
     },
     async ({ url, maxChars }) => {
       try {
-        const page = await fetchPage(url, { fetch: fetchFn, resolve, limits, maxChars });
+        const page = await fetchPage(url, {
+          fetch: fetchFn,
+          resolve,
+          isBlocked,
+          limits,
+          maxChars,
+          render,
+        });
         return text(formatPage(page));
       } catch (err) {
         return error(toMessage(err, 'Fetch failed'));

@@ -5,6 +5,9 @@ import { WebSearchError } from '~/errors';
 /** Resolves a hostname to every address it maps to; injected so tests never touch DNS. */
 export type Resolver = (hostname: string) => Promise<string[]>;
 
+/** Says whether an address must never be reached; injected so tests can serve from loopback. */
+export type AddressFilter = (address: string) => boolean;
+
 export const defaultResolver: Resolver = async (hostname) => {
   const records = await lookup(hostname, { all: true });
   return records.map((record) => record.address);
@@ -22,21 +25,39 @@ const PRIVATE_HOST = 'loopback, link-local and private hosts are blocked';
 export async function assertPublicHttpUrl(
   raw: string,
   resolve: Resolver = defaultResolver,
+  isBlocked: AddressFilter = isPrivateAddress,
 ): Promise<URL> {
   try {
     const url = parseHttpUrl(raw);
-    const host = url.hostname.toLowerCase().replace(/\.$/, '');
-    if (isLocalhostName(host)) {
-      throw new Error(PRIVATE_HOST);
-    }
-    const addresses = await hostAddresses(host, resolve);
-    if (addresses.some(isPrivateAddress)) {
-      throw new Error(PRIVATE_HOST);
-    }
+    await publicAddresses(url.hostname, resolve, isBlocked);
     return url;
   } catch (error) {
     throw new WebSearchError(`Refused to fetch ${raw}: ${(error as Error).message}`);
   }
+}
+
+/**
+ * Resolves a URL hostname and returns its addresses, or throws a plain `Error` naming why the host
+ * is refused. The render proxy connects to the returned address itself, so for rendered pages the
+ * check is connect-time and DNS rebinding is covered there.
+ */
+export async function publicAddresses(
+  hostname: string,
+  resolve: Resolver = defaultResolver,
+  isBlocked: AddressFilter = isPrivateAddress,
+): Promise<string[]> {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  if (isLocalhostName(host)) {
+    throw new Error(PRIVATE_HOST);
+  }
+  const addresses = await hostAddresses(host, resolve);
+  if (addresses.length === 0) {
+    throw new Error('host could not be resolved');
+  }
+  if (addresses.some(isBlocked)) {
+    throw new Error(PRIVATE_HOST);
+  }
+  return addresses;
 }
 
 function parseHttpUrl(raw: string): URL {

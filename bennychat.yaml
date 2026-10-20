@@ -57,3 +57,8 @@ mcpServers:
     env:
       WEBSEARCH_MAX_CHARS: '20000'
       WEBSEARCH_TIMEOUT_MS: '15000'
+      # Roadmap 2.1, JS rendering: a page whose static HTML has almost no text is re-read in
+      # headless Edge/Chrome (auto | always | off). Leave the path empty to use the installed
+      # Microsoft Edge on Windows; set it to a chrome.exe / msedge.exe to pick another browser.
+      WEBSEARCH_RENDER: 'auto'
+      WEBSEARCH_BROWSER_PATH: ''
