@@ -16,8 +16,9 @@ import { useHasAccess, useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
 /**
- * Mobile overflow menu. Collapses the header's secondary actions behind a
- * single control so the bar holds four targets instead of seven. Each action's
+ * Mobile overflow menu, and the only header menu at every width in the minimal
+ * layout. Collapses the header's secondary actions behind a single control so
+ * the bar holds four targets instead of seven. Each action's
  * behaviour and visibility rule comes from the hook that also drives its
  * desktop button, so the two surfaces cannot drift apart.
  */

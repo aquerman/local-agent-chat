@@ -25,6 +25,7 @@ export * from './Endpoint';
 export type { TranslationKeys } from './useLocalize';
 
 export { default as useTimeout } from './useTimeout';
+export { default as useMinimalLayout } from './useMinimalLayout';
 export { default as useNewConvo } from './useNewConvo';
 export { default as useLocalize } from './useLocalize';
 export { default as useGreeting } from './useGreeting';

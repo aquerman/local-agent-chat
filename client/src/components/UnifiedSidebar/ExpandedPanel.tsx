@@ -15,15 +15,9 @@ import store from '~/store';
 
 const AccountSettings = lazy(() => import('~/components/Nav/AccountSettings'));
 
-const NewChatButton = memo(function NewChatButton({
-  setActive,
-}: {
-  setActive: (id: string) => void;
-}) {
-  const localize = useLocalize();
+/** Starts a new chat from the sidebar, returning to the chats panel when the user asked for that. */
+export function useSidebarNewChat(setActive: (id: string) => void) {
   const switchToHistory = useRecoilValue(store.newChatSwitchToHistory);
-  const tooltipDescription = useShortcutHint('newChat', localize('com_ui_new_chat'));
-  const ariaKey = useShortcutAriaKey('newChat');
 
   const handlePanelSwitch = useCallback(() => {
     if (switchToHistory) {
@@ -31,7 +25,18 @@ const NewChatButton = memo(function NewChatButton({
     }
   }, [switchToHistory, setActive]);
 
-  const { handleNewChatClick } = useNewChat({ onNewChat: handlePanelSwitch });
+  return useNewChat({ onNewChat: handlePanelSwitch });
+}
+
+const NewChatButton = memo(function NewChatButton({
+  setActive,
+}: {
+  setActive: (id: string) => void;
+}) {
+  const localize = useLocalize();
+  const tooltipDescription = useShortcutHint('newChat', localize('com_ui_new_chat'));
+  const ariaKey = useShortcutAriaKey('newChat');
+  const { handleNewChatClick } = useSidebarNewChat(setActive);
 
   return (
     <TooltipAnchor
@@ -125,6 +130,7 @@ const NavIconButton = memo(function NavIconButton({
 function ExpandedPanel({
   links,
   expanded = true,
+  compact = false,
   onCollapse,
   onExpand,
   onNavigate,
@@ -132,6 +138,8 @@ function ExpandedPanel({
 }: {
   links: NavLink[];
   expanded?: boolean;
+  /** Keeps only the sidebar toggle, new chat and account; the minimal layout lists the panels as text rows instead. */
+  compact?: boolean;
   onCollapse?: () => void;
   onExpand?: () => void;
   onNavigate?: () => void;
@@ -170,27 +178,29 @@ function ExpandedPanel({
         }
       />
       <NewChatButton setActive={setActive} />
-      <AgentMarketplaceButton />
-      <div className="mx-2 border-b border-border-light" />
-      <div className="flex flex-col gap-1 overflow-y-auto">
-        {links.map((link) => (
-          <NavIconButton
-            key={link.id}
-            link={link}
-            isActive={
-              link.id === 'insights'
-                ? isInsightsRoute
-                : !isInsightsRoute && link.id === effectiveActive
-            }
-            expanded={expanded ?? true}
-            setActive={setActive}
-            onExpand={onExpand}
-            onCollapse={onCollapse}
-            onNavigate={onNavigate}
-            onLeaveInsights={isInsightsRoute ? onLeaveInsights : undefined}
-          />
-        ))}
-      </div>
+      {!compact && <AgentMarketplaceButton />}
+      {!compact && <div className="mx-2 border-b border-border-light" />}
+      {!compact && (
+        <div className="flex flex-col gap-1 overflow-y-auto">
+          {links.map((link) => (
+            <NavIconButton
+              key={link.id}
+              link={link}
+              isActive={
+                link.id === 'insights'
+                  ? isInsightsRoute
+                  : !isInsightsRoute && link.id === effectiveActive
+              }
+              expanded={expanded ?? true}
+              setActive={setActive}
+              onExpand={onExpand}
+              onCollapse={onCollapse}
+              onNavigate={onNavigate}
+              onLeaveInsights={isInsightsRoute ? onLeaveInsights : undefined}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="mt-auto">
         <Suspense fallback={<Skeleton className="h-9 w-9 rounded-lg" />}>

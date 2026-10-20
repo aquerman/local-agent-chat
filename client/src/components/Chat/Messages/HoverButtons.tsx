@@ -12,7 +12,7 @@ import {
   RegenerateIcon,
 } from '@librechat/client';
 import type { TConversation, TMessage, TFeedback } from 'librechat-data-provider';
-import { useGenerationsByLatest, useLocalize } from '~/hooks';
+import { useGenerationsByLatest, useMinimalLayout, useLocalize } from '~/hooks';
 import { useOptionalMessagesOperations } from '~/Providers';
 import { hasEditablePart } from './Content/editableParts';
 import { revealedQueuedTurnFamily } from '~/store/steer';
@@ -138,6 +138,9 @@ const HoverButtons = ({
   handleFeedback,
 }: THoverButtons) => {
   const localize = useLocalize();
+  const minimalLayout = useMinimalLayout();
+  /** The latest reply keeps its actions on screen in the classic layout; the minimal one reveals them on hover like every other row. */
+  const pinActions = isLast && !minimalLayout;
   const [isCopied, setIsCopied] = useState(false);
   const [TextToSpeech] = useRecoilState<boolean>(store.textToSpeech);
   const { getMessages } = useOptionalMessagesOperations();
@@ -227,7 +230,7 @@ const HoverButtons = ({
       {TextToSpeech && !error && !isActiveStreamingMessage && (
         <MessageAudio
           index={index}
-          isLast={isLast}
+          isLast={pinActions}
           messageId={message.messageId}
           content={extractMessageContent(message)}
           renderButton={(props) => (
@@ -236,7 +239,7 @@ const HoverButtons = ({
               title={props.title}
               icon={props.icon}
               isActive={props.isActive}
-              isLast={isLast}
+              isLast={pinActions}
               dataTestId={isLast && !isCreatedByUser ? 'read-aloud-button' : undefined}
             />
           )}
@@ -251,7 +254,7 @@ const HoverButtons = ({
             isCopied ? localize('com_ui_copied_to_clipboard') : localize('com_ui_copy_to_clipboard')
           }
           icon={<MorphIcon icon={isCopied ? Check : Copy} size={19} />}
-          isLast={isLast}
+          isLast={pinActions}
           disabled={!canCopy}
           className={cn(
             'ml-0 flex items-center gap-1.5 text-xs',
@@ -271,7 +274,7 @@ const HoverButtons = ({
           title={localize('com_ui_edit')}
           icon={<EditIcon size="19" />}
           isActive={isEditing}
-          isLast={isLast}
+          isLast={pinActions}
           className={isCreatedByUser ? '' : 'active'}
         />
       )}
@@ -283,13 +286,13 @@ const HoverButtons = ({
           conversationId={conversation.conversationId}
           forkingSupported={forkingSupported}
           latestMessageId={latestMessageId}
-          isLast={isLast}
+          isLast={pinActions}
         />
       )}
 
       {/* Feedback Buttons */}
       {!error && !isActiveStreamingMessage && !isCreatedByUser && handleFeedback != null && (
-        <Feedback handleFeedback={handleFeedback} feedback={message.feedback} isLast={isLast} />
+        <Feedback handleFeedback={handleFeedback} feedback={message.feedback} isLast={pinActions} />
       )}
 
       {/* Regenerate Button */}
@@ -298,7 +301,7 @@ const HoverButtons = ({
           onClick={regenerate}
           title={localize('com_ui_regenerate')}
           icon={<RegenerateIcon size="19" />}
-          isLast={isLast}
+          isLast={pinActions}
           dataTestId={isLast ? 'regenerate-generation-button' : undefined}
           className="active"
         />
@@ -310,7 +313,7 @@ const HoverButtons = ({
           onClick={(e) => e && handleContinue(e)}
           title={localize('com_ui_continue')}
           icon={<ContinueIcon className="w-19 h-19 -rotate-180" />}
-          isLast={isLast}
+          isLast={pinActions}
           dataTestId={isLast ? 'continue-generation-button' : undefined}
           className="active"
         />

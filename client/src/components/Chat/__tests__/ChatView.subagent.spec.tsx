@@ -29,6 +29,7 @@ jest.mock('librechat-data-provider', () => ({
 
 jest.mock('~/hooks', () => ({
   useAddedResponse: () => ({}),
+  useMinimalLayout: () => false,
   useResumeOnLoad: jest.fn(),
   useAdaptiveSSE: jest.fn(),
   useQueueDrain: jest.fn(),

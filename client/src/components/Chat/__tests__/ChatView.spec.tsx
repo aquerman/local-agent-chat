@@ -30,6 +30,7 @@ jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => (key === 'com_ui_new_chat' ? 'New chat' : key),
   useChatHelpers: () => ({ conversation: mockConversation() }),
   useAddedResponse: () => ({}),
+  useMinimalLayout: () => false,
   useAdaptiveSSE: jest.fn(),
   useResumeOnLoad: jest.fn(),
   useQueueDrain: jest.fn(),

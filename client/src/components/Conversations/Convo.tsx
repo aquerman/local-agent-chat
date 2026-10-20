@@ -12,7 +12,7 @@ import {
   usePinConversationMutation,
   useUpdateConversationMutation,
 } from '~/data-provider';
-import { useNavigateToConvo, useLocalize, useShiftKey } from '~/hooks';
+import { useNavigateToConvo, useMinimalLayout, useLocalize, useShiftKey } from '~/hooks';
 import ConversationEndpointIcon from './ConversationEndpointIcon';
 import { focusableInRow, resolveRowBeside } from './focus';
 import { areConversationRenderPropsEqual } from './utils';
@@ -52,6 +52,7 @@ function Conversation({
 }: ConversationProps) {
   const params = useParams();
   const localize = useLocalize();
+  const minimalLayout = useMinimalLayout();
   const { showToast } = useToastContext();
   const { navigateToConvo } = useNavigateToConvo();
   const currentConvoId = useMemo(() => params.conversationId, [params.conversationId]);
@@ -357,7 +358,9 @@ function Conversation({
           localize={localize}
           keyShortcuts={keyShortcuts}
         >
-          <ConversationEndpointIcon conversation={conversation} size={20} context="menu-item" />
+          {!minimalLayout && (
+            <ConversationEndpointIcon conversation={conversation} size={20} context="menu-item" />
+          )}
         </ConvoLink>
       )}
       {isSharedBadgeVisible && (

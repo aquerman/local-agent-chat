@@ -16,6 +16,7 @@ import {
   useQueueDrain,
   useQueuedTurnReveal,
   useLocalize,
+  useMinimalLayout,
 } from '~/hooks';
 import { ChatContext, AddedChatContext, ChatFormProvider, useFileMapContext } from '~/Providers';
 import { QueuedTurnPortalProvider } from './Steering/QueuedTurnPortal';
@@ -63,6 +64,8 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
    *  composer's clearance has to account for the bar when it does — including
    *  before the config answers, so a cold load does not jump. */
   const configuredFooter = useConfiguredFooter();
+  /** The minimal layout drops the welcome screen's generic disclaimer, keeping only configured content. */
+  const minimalLayout = useMinimalLayout();
 
   const methods = useForm<ChatFormValues>({
     defaultValues: { text: '' },
@@ -123,7 +126,7 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
    *  in a conversation when the deployment configured one. The shell already
    *  carried that answer, so this is the same value before and after the config
    *  resolves. */
-  const footerBelow = isLandingPage || configuredFooter;
+  const footerBelow = (isLandingPage && !minimalLayout) || configuredFooter;
   const isNavigating = (!messagesTree || messagesTree.length === 0) && conversationId != null;
   const isProjectLandingPage = isLandingPage && project != null;
 
@@ -226,7 +229,10 @@ function ChatView({ index = 0, project }: { index?: number; project?: TChatProje
                           {!isLandingPage && configuredFooter && <Footer configuredOnly />}
                         </div>
                       </div>
-                      {isLandingPage && <Footer />}
+                      {isLandingPage && !minimalLayout && <Footer />}
+                      {isLandingPage && minimalLayout && configuredFooter && (
+                        <Footer configuredOnly />
+                      )}
                     </>
                   </TraceSurface>
                 </Presentation>

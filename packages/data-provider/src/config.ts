@@ -2248,6 +2248,8 @@ export const interfaceSchema = z
     /** Tool keys (and `'mcp'` or an MCP server name) pinned to the prompt bar by default */
     defaultPinnedTools: z.array(z.string()).optional(),
     buildInfo: z.boolean().optional(),
+    /** `minimal` hides secondary controls behind menus and hover; `classic` is the stock layout. */
+    layout: z.enum(['classic', 'minimal']).optional(),
     remoteAgents: z
       .object({
         use: z.boolean().optional(),
@@ -2350,6 +2352,7 @@ export const interfaceSchema = z
     fileSearch: true,
     fileCitations: true,
     buildInfo: true,
+    layout: 'classic',
     remoteAgents: {
       use: false,
       create: false,
