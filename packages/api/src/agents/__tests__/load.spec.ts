@@ -313,7 +313,7 @@ describe('loadAgent', () => {
     });
 
     test('attaches an alwaysOn server the picker never selected', async () => {
-      mockGetAccessibleMCPServers.mockResolvedValue({
+      mockGetAccessibleMCPServers.mockResolvedValueOnce({
         visible: { chatMenu: true },
         websearch: { alwaysOn: true },
       });
