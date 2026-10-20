@@ -13,7 +13,7 @@ import type { AppConfig } from '@librechat/data-schemas';
 import type { ParsedServerConfig } from '~/mcp/types';
 import {
   requiresEphemeralUserConnection,
-  filterChatSelectableMCPServers,
+  resolveChatMCPServers,
   validateMCPServerConfig,
 } from '~/mcp/utils';
 import { ASK_USER_QUESTION_TOOL_NAME } from '~/agents/hitl/askUserQuestionTool';
@@ -199,7 +199,7 @@ export async function loadAddedAgent(
   /** Narrowed like the primary ephemeral loader: picker selection only, spec
    *  servers added below. */
   const mcpServers = new Set<string>(
-    await filterChatSelectableMCPServers(ephemeralAgent?.mcp, {
+    await resolveChatMCPServers(ephemeralAgent?.mcp, {
       userId,
       role: req.user?.role,
       getAccessibleMCPServers: deps.getAccessibleMCPServers,

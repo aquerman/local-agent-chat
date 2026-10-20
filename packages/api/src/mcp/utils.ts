@@ -517,10 +517,52 @@ export function isChatSelectableMCPServer(
   return config.chatMenu !== false && config.consumeOnly !== true;
 }
 
+type ChatMCPServerConfig = Pick<ParsedServerConfig, 'chatMenu' | 'consumeOnly' | 'alwaysOn'>;
+
+interface ChatMCPServerDeps {
+  userId: string;
+  role?: string;
+  getAccessibleMCPServers?: (
+    userId: string,
+    role?: string,
+  ) => Promise<Record<string, ChatMCPServerConfig>>;
+}
+
+/** The registry's accessible set, or `null` when there is none to narrow by. */
+async function loadAccessibleChatServers({
+  userId,
+  role,
+  getAccessibleMCPServers,
+}: ChatMCPServerDeps): Promise<Record<string, ChatMCPServerConfig> | null> {
+  if (getAccessibleMCPServers == null) {
+    return null;
+  }
+  try {
+    const accessible = await getAccessibleMCPServers(userId, role);
+    return accessible && Object.keys(accessible).length > 0 ? accessible : null;
+  } catch (error) {
+    logger.warn('[MCP] Could not resolve accessible servers; keeping the chat selection', error);
+    return null;
+  }
+}
+
+function narrowToChatSelectable(
+  uniqueServers: string[],
+  accessible: Record<string, ChatMCPServerConfig>,
+): string[] {
+  const aliases = buildServerNameAliases(Object.keys(accessible));
+  return uniqueServers.filter((serverName) => {
+    const resolved =
+      accessible[serverName] ?? accessible[aliases.get(normalizeServerName(serverName)) ?? ''];
+    return isChatSelectableMCPServer(resolved);
+  });
+}
+
 /**
- * Narrows a chat picker selection to the servers that picker is allowed to
- * offer, so a stale client, a replayed body, or a hand-written request cannot
- * reach a server the menu hides.
+ * The MCP servers a chat request attaches: the picker's selection, narrowed to
+ * the servers that picker is allowed to offer, plus every accessible server the
+ * operator marked `alwaysOn`. Narrowing means a stale client, a replayed body,
+ * or a hand-written request cannot reach a server the menu hides.
  *
  * Pass only the picker's own selection. Servers a model spec pins
  * (`modelSpec.mcpServers`) are the operator's choice and stay attached even
@@ -540,51 +582,25 @@ export function isChatSelectableMCPServer(
  * kept, as is every name if the lookup fails: this narrows an
  * already-authenticated selection and is not the authorization boundary.
  *
- * Returns the names as they were sent, so callers keep addressing servers the
- * way the rest of the request does.
+ * Returns the selected names as they were sent, so callers keep addressing
+ * servers the way the rest of the request does.
  */
-export async function filterChatSelectableMCPServers(
+export async function resolveChatMCPServers(
   selectedServers: string[] | null | undefined,
-  {
-    userId,
-    role,
-    getAccessibleMCPServers,
-  }: {
-    userId: string;
-    role?: string;
-    getAccessibleMCPServers?: (
-      userId: string,
-      role?: string,
-    ) => Promise<Record<string, Pick<ParsedServerConfig, 'chatMenu' | 'consumeOnly'>>>;
-  },
+  deps: ChatMCPServerDeps,
 ): Promise<string[]> {
-  if (!Array.isArray(selectedServers) || selectedServers.length === 0) {
-    return [];
-  }
-  const uniqueServers = [...new Set(selectedServers)];
-  if (getAccessibleMCPServers == null) {
+  const uniqueServers = Array.isArray(selectedServers) ? [...new Set(selectedServers)] : [];
+  const accessible = await loadAccessibleChatServers(deps);
+  if (accessible == null) {
     return uniqueServers;
   }
-
-  let accessible: Record<string, Pick<ParsedServerConfig, 'chatMenu' | 'consumeOnly'>>;
-  try {
-    accessible = await getAccessibleMCPServers(userId, role);
-  } catch (error) {
-    logger.warn('[MCP] Could not resolve accessible servers; keeping the chat selection', error);
-    return uniqueServers;
+  const resolved = new Set(narrowToChatSelectable(uniqueServers, accessible));
+  for (const [serverName, config] of Object.entries(accessible)) {
+    if (config?.alwaysOn === true) {
+      resolved.add(serverName);
+    }
   }
-
-  const accessibleNames = Object.keys(accessible ?? {});
-  if (accessibleNames.length === 0) {
-    return uniqueServers;
-  }
-  const aliases = buildServerNameAliases(accessibleNames);
-
-  return uniqueServers.filter((serverName) => {
-    const resolved =
-      accessible[serverName] ?? accessible[aliases.get(normalizeServerName(serverName)) ?? ''];
-    return isChatSelectableMCPServer(resolved);
-  });
+  return [...resolved];
 }
 
 /**
@@ -720,6 +736,7 @@ export function redactServerSecrets(
     description: config.description,
     iconPath: config.iconPath,
     chatMenu: config.chatMenu,
+    alwaysOn: config.alwaysOn,
     requiresOAuth: config.requiresOAuth,
     capabilities: config.capabilities,
     tools: config.tools,
