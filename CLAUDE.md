@@ -355,6 +355,28 @@ syncs conflict only here.
   `createRun` appends it to `allow` (`resolveToolApprovalPolicy` `session` layer). `ask`/`deny`
   patterns still win over it, so do not put write tools in `ask` if they should be rememberable.
 
+## Connectors (Todoist, calendar, email)
+
+- Roadmap 4; full setup in `docs/connectors.md`. Three `mcpServers` entries in `bennychat.yaml`, all
+  `startup: false`: each user connects from the MCP panel, credentials stay per user, encrypted in
+  MongoDB (never `.env`/git). Enable per chat in the MCP selector, or add to an agent.
+- `todoist`: Todoist's official remote server `https://ai.todoist.net/mcp`, `requiresOAuth`; LibreChat
+  does dynamic client registration and the callback is `<DOMAIN_SERVER>/api/mcp/todoist/oauth/callback`.
+  ~45 tools, so add it only where needed. Writes ask via `endpoints.agents.toolApproval` (roadmap 13).
+- `calendar` (`packages/calendar`, ical.js): read-only `list_events` / `search_events` over the secret
+  ICS address (Google or Outlook publish one), set as the per-user var `CALENDAR_ICS_URL` (several:
+  `|`-separated). Feeds cached 5 min. Google/Outlook API servers with writes can be added later.
+- `email` (`packages/email`, imapflow + mailparser): read-only `search_emails` / `read_email` /
+  `list_folders` over IMAP with an app password (Gmail, Fastmail, iCloud; not Outlook.com, which has
+  no password IMAP). Folders opened with EXAMINE, so reading never marks mail read; no send tool.
+- Unfilled per-user vars reach the servers as literal `{{VAR}}`; both servers treat that as "not
+  connected" and answer with setup instructions instead of failing.
+- Tests: `cd packages/calendar && npx jest` (fixture ICS: recurrence, EXDATE, moved occurrence, DST,
+  IANA TZID without VTIMEZONE, floating, all-day); `cd packages/email && npx jest`, with
+  `EMAIL_TEST_IMAP_PORT=3143` against a GreenMail container for the live IMAP suite.
+- Small models invent dates: the calendar tools default to today and their descriptions say to leave
+  `start` out; the result always begins with "Now: <date>".
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in
