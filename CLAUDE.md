@@ -274,6 +274,37 @@ syncs conflict only here.
   person, and once a key already held a value it described the new fact in text instead of calling
   `set_memory` (4 of 4 tries). Merging into an existing key still needs to be checked on Qwen3.5-9B.
 
+## Routines (scheduled chats)
+
+- Upstream's experimental scheduled chats (`packages/api/src/schedules`, README there) are switched on
+  by `interface.schedules` in `bennychat.yaml`. A schedule sends a fixed prompt to an **agent** on a
+  cadence (hourly/daily/weekdays/weekly or cron, own timezone) and files each run as a new chat with
+  that agent. UI: "Scheduled chats" (minimal layout: Customize menu), with Run now, pause and last run.
+- `.env` needs `SCHEDULES_SINGLE_PROCESS=true` (no Redis). Without it the engine does not arm: the log
+  says "scheduler NOT started" and every schedule write answers 503. `SCHEDULES_DISABLED=true` is
+  upstream's emergency stop for automatic and manual runs.
+- How a run fires: the engine ticks every ~30 s, claims due rows with a Mongo lease, then POSTs the
+  prompt to the agents chat route as the owner over loopback. `POST /api/schedules/:id/run` (the Run
+  now button) fires immediately. An occurrence more than 15 min overdue (backend down, PC asleep) is
+  skipped, not replayed. 5 consecutive failures auto-disable a schedule.
+- Fork choices: upstream defaults (`minIntervalMinutes: 60`, the schema allows 1, used only in rig
+  tests) except `fireConcurrency: 1` for the one GPU; a second due run waits for the slot (Run now
+  answers "skipped (capacity)"). Labels stay "Scheduled chats": renaming to "Routines" means editing
+  upstream's English locale keys, which conflicts on every sync, and there is no config override.
+- Thinking: an agent with no reasoning effort set already runs at Low (`applyLlamaCppThinking`,
+  512-token budget). Set the agent's thinking to Off for routines that do not need it, and keep the
+  prompt short; it runs without chat history.
+- One GPU: routines and live chat share llama-server. Unless local-llm starts it with `--parallel 2`
+  (local-llm's launcher, roadmap F1), a routine run blocks chat until it finishes, and vice versa.
+- The PC must be awake at run time: README "Routines" covers awake hours and wake timers.
+- `SCHEDULES_SINGLE_PROCESS` is a promise that one backend uses this MongoDB. Two backends on the
+  same database each run an engine and mark the other's live runs `interrupted` (seen in the rig).
+- Verified 2026-10-20 in the cloud rig: engine armed; schedule created over the API and shown in the
+  panel; with the interval lowered to 1 min in a scratch config, a `*/2` cron fired 5 runs in a row
+  (mock model), each a new agents chat with the reply and `lastRun: success`; Run now against the
+  CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
+  `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

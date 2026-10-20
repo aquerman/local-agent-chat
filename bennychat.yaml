@@ -20,6 +20,18 @@ interface:
   skills:
     use: true
     create: true
+  # Roadmap 3 (Routines): upstream's scheduled chats, shown in the UI as "Scheduled chats".
+  # A schedule sends a prompt to an agent on a cadence and files each run as a new chat.
+  # Needs SCHEDULES_SINGLE_PROCESS=true in .env (no Redis here). Upstream defaults except
+  # fireConcurrency: one GPU slot, so scheduled runs go one at a time; a run that finds the
+  # slot busy waits and retries instead of being dropped. See CLAUDE.md "Routines".
+  schedules:
+    use: true
+    create: true
+    maxPerUser: 10
+    minIntervalMinutes: 60
+    autoDisableAfterFailures: 5
+    fireConcurrency: 1
 
 endpoints:
   # LibreChat's SSRF guard blocks loopback unless it is listed here as host:port.
