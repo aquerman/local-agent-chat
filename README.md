@@ -189,6 +189,32 @@ menu with **Run now**.
 Routines share the GPU with your chats: while one runs, a chat waits for it (and the other way
 round) unless local-llm starts llama-server with a second slot (`--parallel 2`).
 
+### Morning brief
+
+A ready-made routine: every morning a chat with today's events, the Todoist tasks due today or
+overdue, three headlines and your top three priorities, in under 250 words.
+
+1. Connect what you want in it (MCP panel, see `docs/connectors.md`): **Calendar** (paste your
+   calendar's secret iCal address) and **Todoist** (Connect, approve in the browser). Both are
+   optional; headlines need nothing.
+2. With BennyChat stopped or running, from the repo folder:
+
+   ```powershell
+   npm run seed-benny -- --brief --schedule --time 07:00 --tz Europe/Amsterdam
+   ```
+
+   `--time` defaults to 07:00 and `--tz` to the PC's own time zone, so `--brief --schedule` is
+   enough for most people. It creates the **Morning brief** agent and one daily scheduled chat, and
+   prints which sources it found. Add your email as the first argument if more than one account
+   exists.
+3. Customize → Scheduled chats → Morning brief → "…" → **Run now** to try it.
+
+A source you have not connected is left out of the brief and named on its last line ("Not
+connected: Calendar, Todoist") instead of stopping it. After connecting one later, run the same command again: it adds that source
+to the agent and leaves the schedule as it is (or moves it, if you pass a new time). If Todoist's
+sign-in expires, the schedule pauses itself and its card says which connector needs reconnecting;
+reconnect it in the MCP panel and switch the schedule back on.
+
 ### Keeping the PC awake for routines
 
 A routine only runs if the PC is awake and BennyChat and llama-server are running at that time. A
