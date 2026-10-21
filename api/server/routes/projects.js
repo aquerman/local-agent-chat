@@ -14,6 +14,7 @@ const handlers = createProjectHandlers({
   listChatProjectKnowledge: db.listChatProjectKnowledge,
   addChatProjectKnowledge: db.addChatProjectKnowledge,
   removeChatProjectKnowledge: db.removeChatProjectKnowledge,
+  listProjectThreads: db.listProjectThreads,
 });
 
 router.use(requireJwtAuth);
@@ -27,5 +28,6 @@ router.delete('/:projectId', handlers.deleteProject);
 router.get('/:projectId/knowledge', handlers.listKnowledge);
 router.post('/:projectId/knowledge', handlers.addKnowledge);
 router.delete('/:projectId/knowledge/:fileId', handlers.removeKnowledge);
+router.get('/:projectId/threads', handlers.listThreads);
 
 module.exports = router;

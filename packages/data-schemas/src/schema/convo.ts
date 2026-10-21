@@ -368,6 +368,11 @@ const convoSchema: Schema<IConversation> = new Schema(
       default: null,
       index: true,
     },
+    /** Fork (roadmap P1b): status of the project task thread this chat runs, if any. */
+    threadStatus: {
+      type: String,
+      enum: ['working', 'needs_you', 'done', 'failed'],
+    },
     files: {
       type: [String],
     },

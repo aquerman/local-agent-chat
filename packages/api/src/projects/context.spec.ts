@@ -273,6 +273,7 @@ describe('applyProjectSearchFiles', () => {
       projectId: 'p',
       instructions: '',
       searchFileIds: ['k', 'own'],
+      role: 'chat',
     });
     expect(agent.tools).toEqual(['web_search', Tools.file_search]);
     expect(agent.tool_resources?.[EToolResources.file_search]?.file_ids).toEqual(['own', 'k']);
@@ -280,7 +281,12 @@ describe('applyProjectSearchFiles', () => {
 
   it('leaves the agent alone when nothing needs searching', () => {
     const agent: ProjectContextAgent = { tools: [] };
-    applyProjectSearchFiles(agent, { projectId: 'p', instructions: 'x', searchFileIds: [] });
+    applyProjectSearchFiles(agent, {
+      projectId: 'p',
+      instructions: 'x',
+      searchFileIds: [],
+      role: 'chat',
+    });
     expect(agent).toEqual({ tools: [] });
   });
 });

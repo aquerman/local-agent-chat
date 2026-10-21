@@ -104,6 +104,17 @@ export interface ChatProjectMethods {
     projectId: string,
     fileId: string,
   ): Promise<IChatProject | null>;
+  /**
+   * Makes `conversationId` the project's coordinator chat when it has none yet. Returns the
+   * coordinator id after the call (this chat's or the existing one), or null without the project.
+   */
+  claimChatProjectCoordinator(
+    user: string,
+    projectId: string,
+    conversationId: string,
+    /** A coordinator chat that no longer exists and may be replaced. */
+    replace?: string,
+  ): Promise<string | null>;
 }
 
 type ProjectCursor = {
@@ -528,12 +539,14 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
       return { deletedCount: 0, modifiedCount: 0 };
     }
 
+    const ProjectThread = mongoose.models.ProjectThread;
     const [conversationResult, deleteResult] = await Promise.all([
       Conversation.updateMany(
         { user, chatProjectId: projectId },
-        { $unset: { chatProjectId: '' } },
+        { $unset: { chatProjectId: '', threadStatus: '' } },
       ),
       ChatProject.deleteOne(projectFilter),
+      ProjectThread?.deleteMany({ user, projectId }),
     ]);
 
     return {
@@ -597,6 +610,34 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
       previousProjectId,
       projectId: normalizedProjectId,
     };
+  }
+
+  async function claimChatProjectCoordinator(
+    user: string,
+    projectId: string,
+    conversationId: string,
+    replace?: string,
+  ): Promise<string | null> {
+    if (!isValidObjectIdString(projectId) || !conversationId) {
+      return null;
+    }
+    const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
+    const _id = new mongoose.Types.ObjectId(projectId);
+    const replaceable: Array<string | null> = replace ? [null, '', replace] : [null, ''];
+    const claimed = await ChatProject.findOneAndUpdate(
+      { _id, user, coordinatorConversationId: { $in: replaceable } },
+      { $set: { coordinatorConversationId: conversationId } },
+      { new: true, timestamps: false },
+    )
+      .select('coordinatorConversationId')
+      .lean<IChatProject>();
+    if (claimed) {
+      return claimed.coordinatorConversationId ?? null;
+    }
+    const current = await ChatProject.findOne({ _id, user })
+      .select('coordinatorConversationId')
+      .lean<IChatProject>();
+    return current?.coordinatorConversationId ?? null;
   }
 
   async function refreshChatProjectStats(
@@ -729,5 +770,6 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     getChatProjectKnowledgeText,
     addChatProjectKnowledge,
     removeChatProjectKnowledge,
+    claimChatProjectCoordinator,
   };
 }

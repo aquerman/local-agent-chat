@@ -321,6 +321,8 @@ export interface IConversation extends Document {
   spec?: string;
   tags?: string[];
   chatProjectId?: string | null;
+  /** Set on a project task thread's chat; mirrors the thread record for list badges. */
+  threadStatus?: 'working' | 'needs_you' | 'done' | 'failed';
   tools?: string[];
   maxContextTokens?: number;
   max_tokens?: number;

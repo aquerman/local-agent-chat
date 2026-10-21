@@ -119,6 +119,12 @@ endpoints:
         # Roadmap 8, folder access: the filesystem server's one read-only tool the patterns above
         # miss. Its write_file, edit_file, create_directory and move_file match nothing, so they ask.
         - 'directory_tree_mcp_filesystem'
+        # Roadmap P1b/P1c: the coordinator's thread tools only queue and read chats inside this
+        # project (the thread's own tools still ask), so they run without asking.
+        - 'start_thread'
+        - 'list_threads'
+        - 'read_summary'
+        - 'post_to_thread'
       reason: 'Benny wants to run {tool}. It can change data outside this chat.'
     # Paused runs (approval or Ask User) wait up to a day in MongoDB, then expire.
     checkpointer:
@@ -384,3 +390,17 @@ modelSpecs:
 # by file, and the rest is named as left out. See CLAUDE.md "Projects".
 projects:
   knowledgeInlineTokens: 6000
+  # Roadmap P1b/P1c (project threads + coordinator), like a Claude project with a coordinator and
+  # task threads: the first chat in a project becomes its coordinator and gets four tools,
+  # start_thread / list_threads / read_summary / post_to_thread. A thread is an ordinary chat in
+  # the project that runs in the background, one at a time after live chat (one GPU slot), and
+  # hands back a summary (thinking off) that the coordinator sees after the project knowledge.
+  # agentId runs threads started from a plain Benner chat; an agent chat uses its own agent.
+  # Needs the agent trigger queue, which every backend runs. See CLAUDE.md "Project threads".
+  threads:
+    enabled: true
+    agentId: 'agent_benny'
+    concurrency: 1
+    summaryMaxTokens: 300
+    indexLimit: 12
+    briefMaxChars: 4000

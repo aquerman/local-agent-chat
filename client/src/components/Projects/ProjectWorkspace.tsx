@@ -16,6 +16,7 @@ import { useLocalize, useNewConvo } from '~/hooks';
 import ProjectKnowledge from './ProjectKnowledge';
 import { cn, clearMessagesCache } from '~/utils';
 import ProjectChatList from './ProjectChatList';
+import ProjectThreads from './ProjectThreads';
 import store from '~/store';
 
 type ChatSortField = 'updatedAt' | 'createdAt';
@@ -274,10 +275,10 @@ export default function ProjectWorkspace() {
               loadMore={() => fetchNextPage()}
             />
           </section>
-          <ProjectKnowledge
-            project={project}
-            className="order-first md:order-none md:w-80 md:shrink-0"
-          />
+          <div className="order-first flex flex-col gap-4 md:order-none md:w-80 md:shrink-0">
+            <ProjectThreads project={project} />
+            <ProjectKnowledge project={project} />
+          </div>
         </div>
       </div>
     </main>

@@ -13,6 +13,7 @@ import {
   useUpdateConversationMutation,
 } from '~/data-provider';
 import { useNavigateToConvo, useMinimalLayout, useLocalize, useShiftKey } from '~/hooks';
+import ThreadStatusChip from '~/components/Projects/ThreadStatusChip';
 import ConversationEndpointIcon from './ConversationEndpointIcon';
 import { focusableInRow, resolveRowBeside } from './focus';
 import { areConversationRenderPropsEqual } from './utils';
@@ -363,6 +364,9 @@ function Conversation({
           )}
         </ConvoLink>
       )}
+      {!renaming && conversation.threadStatus ? (
+        <ThreadStatusChip status={conversation.threadStatus} className="mr-1 shrink-0" />
+      ) : null}
       {isSharedBadgeVisible && (
         <Link2 className="icon-sm mr-1 shrink-0 text-text-secondary" aria-hidden="true" />
       )}
