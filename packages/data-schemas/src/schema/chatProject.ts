@@ -1,5 +1,7 @@
 import { Schema } from 'mongoose';
 import {
+  CHAT_PROJECT_ICONS,
+  CHAT_PROJECT_COLORS,
   MAX_CHAT_PROJECT_KNOWLEDGE_FILES,
   MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH,
 } from 'librechat-data-provider';
@@ -33,6 +35,16 @@ const chatProjectSchema: Schema<IChatProjectDocument> = new Schema<IChatProjectD
         validator: (ids: string[]) => ids.length <= MAX_CHAT_PROJECT_KNOWLEDGE_FILES,
         message: `A project holds at most ${MAX_CHAT_PROJECT_KNOWLEDGE_FILES} knowledge files`,
       },
+    },
+    icon: {
+      type: String,
+      enum: CHAT_PROJECT_ICONS,
+      default: null,
+    },
+    color: {
+      type: String,
+      enum: CHAT_PROJECT_COLORS,
+      default: null,
     },
     user: {
       type: String,

@@ -1,9 +1,10 @@
 import { useCallback, useMemo } from 'react';
-import { Folder, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { ControlCombobox, TooltipAnchor } from '@librechat/client';
 import type { TChatProject } from 'librechat-data-provider';
 import type { OptionWithIcon } from '~/common';
+import ProjectIcon from '~/components/Projects/ProjectIcon';
 import { useProjectsInfiniteQuery } from '~/data-provider';
 import { useChatContext } from '~/Providers';
 import { useLocalize } from '~/hooks';
@@ -29,7 +30,7 @@ export default function ProjectLandingChip({ project }: { project: TChatProject 
       projects.map((item) => ({
         label: item.name,
         value: item._id,
-        icon: <Folder className="h-4 w-4 text-text-secondary" aria-hidden="true" />,
+        icon: <ProjectIcon project={item} className="h-4 w-4" />,
       })),
     [projects],
   );
@@ -64,7 +65,7 @@ export default function ProjectLandingChip({ project }: { project: TChatProject 
             applyProject(value);
           }
         }}
-        SelectIcon={<Folder className="h-3.5 w-3.5 text-text-secondary" aria-hidden="true" />}
+        SelectIcon={<ProjectIcon project={project} className="h-3.5 w-3.5" />}
         ariaLabel={localize('com_ui_change_project')}
         searchPlaceholder={localize('com_ui_search_projects')}
         isCollapsed={false}

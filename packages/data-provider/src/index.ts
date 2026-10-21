@@ -7,6 +7,7 @@ export * from './footer';
 export * from './langchain';
 export * from './filters';
 export * from './file-config';
+export * from './projects';
 export * from './resolve-llm-delivery-path';
 /* messages  */
 export * from './messages';

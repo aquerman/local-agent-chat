@@ -276,8 +276,27 @@ html {
   --provider-azure: linear-gradient(0.375turn, #61bde2, #4389d0);
   --provider-bedrock: #268672;
   --provider-foreground: #ffffff;
+  /* Project colors: user data, not theme roles, so each has a light and a dark value here. */
+  --project-red: #dc2626;
+  --project-orange: #ea580c;
+  --project-yellow: #ca8a04;
+  --project-green: #16a34a;
+  --project-teal: #0d9488;
+  --project-blue: #2563eb;
+  --project-indigo: #4f46e5;
+  --project-purple: #9333ea;
+  --project-pink: #db2777;
 }
 .dark {
+  --project-red: #f87171;
+  --project-orange: #fb923c;
+  --project-yellow: #facc15;
+  --project-green: #4ade80;
+  --project-teal: #2dd4bf;
+  --project-blue: #60a5fa;
+  --project-indigo: #818cf8;
+  --project-purple: #c084fc;
+  --project-pink: #f472b6;
   --brand-purple: 171 104 255;
   --presentation: var(--gray-800);
   --text-primary: var(--gray-100);

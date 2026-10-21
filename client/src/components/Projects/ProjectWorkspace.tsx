@@ -1,7 +1,7 @@
 import { useCallback, useId, useMemo, useState } from 'react';
 import * as Ariakit from '@ariakit/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowUpDown, Check, Folder, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Check, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button, Spinner, DropdownPopup, TooltipAnchor, useMediaQuery } from '@librechat/client';
 import type { ConversationListResponse } from 'librechat-data-provider';
 import type { MenuItemProps, RenderProp } from '~/common';
@@ -9,9 +9,10 @@ import { useConversationsInfiniteQuery, useProjectQuery } from '~/data-provider'
 import OpenSidebar from '~/components/Chat/Menus/OpenSidebar';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
 import ProjectEditDialog from './ProjectEditDialog';
-import ProjectKnowledge from './ProjectKnowledge';
 import { useStartProjectChat } from './navigation';
+import ProjectKnowledge from './ProjectKnowledge';
 import ProjectChatList from './ProjectChatList';
+import { ProjectIconTile } from './ProjectIcon';
 import ProjectThreads from './ProjectThreads';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -149,9 +150,11 @@ export default function ProjectWorkspace() {
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-10 pt-6 md:px-6 md:pt-8">
         <div className="flex items-start gap-3.5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary text-text-secondary">
-            <Folder className="h-6 w-6" aria-hidden="true" />
-          </span>
+          <ProjectIconTile
+            project={project}
+            className="h-12 w-12 rounded-2xl bg-surface-secondary"
+            iconClassName="h-6 w-6"
+          />
           <div className="min-w-0 flex-1 pt-0.5">
             <h1 className="truncate text-balance text-2xl font-semibold tracking-tight text-text-primary">
               {project.name}

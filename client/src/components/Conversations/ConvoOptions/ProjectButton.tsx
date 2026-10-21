@@ -1,5 +1,4 @@
 import { useMemo, useState, type RefObject } from 'react';
-import { Folder } from 'lucide-react';
 import {
   Button,
   ControlCombobox,
@@ -15,6 +14,7 @@ import {
 import type { TChatProject } from 'librechat-data-provider';
 import type { OptionWithIcon } from '~/common';
 import { useAssignConversationToProjectMutation, useProjectsInfiniteQuery } from '~/data-provider';
+import ProjectIcon from '~/components/Projects/ProjectIcon';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
 
@@ -59,7 +59,7 @@ function ProjectConversationDialog({
       projects.map((project) => ({
         label: project.name,
         value: project._id,
-        icon: <Folder className="h-4 w-4 text-text-secondary" aria-hidden="true" />,
+        icon: <ProjectIcon project={project} className="h-4 w-4" />,
       })),
     [projects],
   );
@@ -117,7 +117,7 @@ function ProjectConversationDialog({
           displayValue={selectedProject?.name}
           items={projectItems}
           setValue={setSelectedProjectId}
-          SelectIcon={<Folder className="h-4 w-4 text-text-secondary" aria-hidden="true" />}
+          SelectIcon={<ProjectIcon project={selectedProject} className="h-4 w-4" />}
           ariaLabel={localize('com_ui_select_project')}
           searchPlaceholder={localize('com_ui_search_projects')}
           selectPlaceholder={localize('com_ui_select_project')}

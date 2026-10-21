@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronRight,
   Ellipsis,
-  Folder,
   FolderPlus,
   Folders,
   Pencil,
@@ -40,11 +39,12 @@ import {
 } from '~/data-provider';
 import ProjectCreateDialog from '~/components/Projects/ProjectCreateDialog';
 import ProjectDeleteDialog from '~/components/Projects/ProjectDeleteDialog';
-import { useStartProjectChat } from '~/components/Projects/navigation';
 import ProjectEditDialog from '~/components/Projects/ProjectEditDialog';
+import { useStartProjectChat } from '~/components/Projects/navigation';
+import ProjectIcon from '~/components/Projects/ProjectIcon';
 import { useLocalize, useLocalStorage } from '~/hooks';
-import { cn } from '~/utils';
 import { Collapse } from '~/components/ui';
+import { cn } from '~/utils';
 import Convo from './Convo';
 import store from '~/store';
 
@@ -227,12 +227,13 @@ const ProjectItem = memo(
       [project._id, startProjectChat, toggleNav],
     );
 
+    const { icon, color } = project;
     const menuItems = useMemo<MenuItemProps[]>(
       () => [
         {
           id: `${menuId}-open`,
           label: localize('com_ui_open_project'),
-          icon: <Folder className="size-4 text-text-secondary" aria-hidden="true" />,
+          icon: <ProjectIcon project={{ icon, color }} className="size-4" />,
           onClick: openProject,
         },
         {
@@ -248,7 +249,7 @@ const ProjectItem = memo(
           onClick: () => setIsDeleteOpen(true),
         },
       ],
-      [localize, menuId, openProject],
+      [localize, menuId, openProject, icon, color],
     );
 
     return (
@@ -276,7 +277,7 @@ const ProjectItem = memo(
               )}
               aria-hidden="true"
             />
-            <Folder className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
+            <ProjectIcon project={project} className="h-4 w-4" />
             <span className="min-w-0 truncate">{project.name}</span>
           </button>
           <div
@@ -345,6 +346,8 @@ const ProjectItem = memo(
     prevProps.project._id === nextProps.project._id &&
     prevProps.project.name === nextProps.project.name &&
     prevProps.project.description === nextProps.project.description &&
+    prevProps.project.icon === nextProps.project.icon &&
+    prevProps.project.color === nextProps.project.color &&
     prevProps.project.conversationCount === nextProps.project.conversationCount &&
     prevProps.project.updatedAt === nextProps.project.updatedAt &&
     prevProps.defaultExpanded === nextProps.defaultExpanded &&
