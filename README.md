@@ -50,10 +50,10 @@ from a phone over Tailscale.
   document house style), in Claude's `SKILL.md` format. Turn on "Skills" in the tools menu and the
   model sees only their names and one-line descriptions, loading a skill's full instructions when it
   needs one; or type `$` to pick one yourself. Add your own from the Skills panel.
-- **Offline artifacts.** HTML, SVG and Markdown previews, Mermaid diagrams and the code view work
-  without the internet: BennyChat serves the preview bundler, Tailwind and the code editor itself.
-  Set `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env` to switch it on. React
-  previews still load their bundler from codesandbox.io.
+- **Offline artifacts.** HTML, SVG, Markdown and React previews, Mermaid diagrams and the code view
+  work without the internet: BennyChat serves the preview bundler, Tailwind, the code editor and the
+  libraries React artifacts use (React, lucide icons, recharts, three.js, shadcn/ui components) itself.
+  Set `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env` to switch it on.
 - **Memory.** After each message, the local model notes lasting facts you mention: who you are, your
   preferences, your current projects and any standing instructions. It keeps them in a short memory
   (1.5k tokens) that every new chat sees. You can view, edit or delete entries, or switch memory off,

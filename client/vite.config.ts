@@ -2,12 +2,13 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import { constants } from 'zlib';
-import { defineConfig } from 'vite';
+import { build, defineConfig } from 'vite';
 import { createRequire } from 'module';
 import { VitePWA } from 'vite-plugin-pwa';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { compression, defineAlgorithm } from 'vite-plugin-compression2';
 import type { Plugin } from 'vite';
+import { SANDBOX_MODULES, sandboxImportPath } from './src/sandbox/modules';
 
 const require = createRequire(import.meta.url);
 
@@ -470,6 +471,7 @@ export function sourcemapExclude(opts?: SourcemapExclude): Plugin {
  * - `artifacts-preview/__csb_vendor/`: Tailwind's browser build and `marked` (Markdown and code
  *   previews). The `__csb` prefix makes the preview's service worker pass these requests
  *   through to the server.
+ * - `artifacts-preview/__csb_vendor/react/`: the React artifact runtime (see `buildSandboxRuntime`).
  * - `monaco/vs`: the AMD build `@monaco-editor/react` otherwise loads from jsDelivr.
  */
 export function copyArtifactRuntime(): Plugin {
@@ -502,8 +504,60 @@ export function copyArtifactRuntime(): Plugin {
         ),
       );
       await fs.promises.cp(monacoDir, path.join(outDir, 'monaco', 'vs'), { recursive: true });
+      await buildSandboxRuntime(path.join(vendorOut, 'react'));
     },
   };
+}
+
+const SANDBOX_ENTRY_ID = '\0sandbox-runtime-entry';
+
+/**
+ * Builds the runtime that renders React artifacts without Sandpack's online bundler:
+ * `runtime.js` (`src/sandbox/runtime.ts` with sucrase) plus one lazily imported chunk per
+ * vendored package in `SANDBOX_MODULES`, with shared code such as React split into common
+ * chunks so every package sees the same React instance. A separate Vite build, because these
+ * chunks must not join the app's own bundle or its PWA precache.
+ */
+async function buildSandboxRuntime(outDir: string): Promise<void> {
+  const runtimePath = path.resolve(import.meta.dirname, 'src/sandbox/runtime.ts');
+  const loaders = SANDBOX_MODULES.map(
+    (name) =>
+      `  ${JSON.stringify(name)}: () => import(${JSON.stringify(sandboxImportPath(name))}),`,
+  ).join('\n');
+  const entry = `import { start } from ${JSON.stringify(runtimePath)};\nstart({\n${loaders}\n});\n`;
+  await build({
+    configFile: false,
+    root: import.meta.dirname,
+    publicDir: false,
+    logLevel: 'warn',
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+    plugins: [
+      {
+        name: 'sandbox-runtime-entry',
+        resolveId: (id) => (id === SANDBOX_ENTRY_ID ? id : null),
+        load: (id) => (id === SANDBOX_ENTRY_ID ? entry : null),
+      },
+    ],
+    build: {
+      outDir,
+      emptyOutDir: true,
+      copyPublicDir: false,
+      target: 'es2020',
+      sourcemap: false,
+      modulePreload: false,
+      reportCompressedSize: false,
+      chunkSizeWarningLimit: 4096,
+      rolldownOptions: {
+        input: SANDBOX_ENTRY_ID,
+        preserveEntrySignatures: false,
+        output: {
+          format: 'es',
+          entryFileNames: 'runtime.js',
+          chunkFileNames: 'chunks/[name]-[hash].js',
+        },
+      },
+    },
+  });
 }
 
 /**

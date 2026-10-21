@@ -265,12 +265,22 @@ syncs conflict only here.
   bundler. With `CSP_ENABLED`, add `CSP_FRAME_SRC_EXTRA=http://*.localhost:3080` (untested).
 - Self-hosted previews get Tailwind v4 (`@tailwindcss/browser`, the official browser build), not
   the v3 Play CDN. Most utility classes are the same, but a `tailwind.config = {...}` script is ignored.
-- React artifacts still need the internet: Sandpack's runtime bundler (`2-19-8-sandpack.codesandbox.io`)
-  fetches npm packages from codesandbox's packager and CDNs, and none of that is on npm to vendor.
-  Keep `SANDPACK_BUNDLER_URL` unset.
-- Verified 2026-10-20 in the cloud test rig (Chromium; every non-localhost request aborted and
-  unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid and the Code tab rendered with
-  zero external requests. React stopped at the bundler.
+- React artifacts render offline too, on the same switch (page on this machine only). `ArtifactPreview`
+  swaps the `react-ts` template for `static` (`client/src/sandbox/preview.ts`): one `index.html` with
+  the artifact's files as embedded JSON and `/__csb_vendor/react/runtime.js`. That runtime
+  (`client/src/sandbox/runtime.ts`) strips TS/JSX with sucrase, links the files CommonJS-style and
+  renders `App`'s default export into `#root`. Packages come from chunks a second Vite build in
+  `copyArtifactRuntime` makes from npm, one lazy chunk per entry of `SANDBOX_MODULES`
+  (`client/src/sandbox/modules.ts`: React, lucide-react, recharts, three, date-fns, radix, ...), ~3 MB
+  on disk, only imported chunks load. A package not in that list shows an error in the preview
+  instead of loading from npm; add it there (and to client devDependencies) to vendor it. A test keeps
+  the list in sync with the online template's dependencies. lucide-react is the app's 0.528, not the
+  0.394 the prompt names. Keep `SANDPACK_BUNDLER_URL` unset.
+- Verified 2026-10-20/21 in the cloud test rig (Chromium; every non-localhost request aborted and
+  unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid, the Code tab, and React
+  artifacts (useState + Tailwind + lucide icon + recharts chart; shadcn Card/Tabs/Badge + three +
+  date-fns) rendered with zero external requests. Without the env var React still uses codesandbox.
+
 ## Memory
 
 - Upstream memory, switched on in the `memory:` section of `bennychat.yaml` (roadmap 7). After each

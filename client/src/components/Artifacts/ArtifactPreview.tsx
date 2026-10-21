@@ -6,7 +6,13 @@ import type {
 } from '@codesandbox/sandpack-react/unstyled';
 import type { SandpackStartupConfig } from '~/utils/artifacts';
 import type { ArtifactFiles } from '~/common';
-import { sharedFiles, buildSandpackOptions, isSelfHostedPreview } from '~/utils/artifacts';
+import {
+  sharedFiles,
+  resolveStaticBundler,
+  buildSandpackOptions,
+  isSelfHostedPreview,
+} from '~/utils/artifacts';
+import { getOfflineReactFiles, isOfflineReactPreview } from '~/sandbox/preview';
 import { withSelfHostedMarked } from '~/utils/markdown';
 
 export const ArtifactPreview = memo(function ({
@@ -26,7 +32,13 @@ export const ArtifactPreview = memo(function ({
   currentCode?: string;
   startupConfig?: SandpackStartupConfig;
 }) {
-  const selfHosted = isSelfHostedPreview(template, startupConfig);
+  const offlineReact = isOfflineReactPreview(
+    template,
+    fileKey,
+    resolveStaticBundler(startupConfig?.staticBundlerURL, window.location.hostname).selfHosted,
+  );
+  const previewTemplate = offlineReact ? 'static' : template;
+  const selfHosted = isSelfHostedPreview(previewTemplate, startupConfig);
 
   const artifactFiles = useMemo(() => {
     if (Object.keys(files).length === 0) {
@@ -43,9 +55,14 @@ export const ArtifactPreview = memo(function ({
     };
   }, [currentCode, files, fileKey, selfHosted]);
 
+  const previewFiles = useMemo(() => {
+    const allFiles = { ...artifactFiles, ...sharedFiles };
+    return offlineReact ? getOfflineReactFiles(allFiles) : allFiles;
+  }, [artifactFiles, offlineReact]);
+
   const options: SandpackProviderProps['options'] = useMemo(
-    () => buildSandpackOptions(template, startupConfig),
-    [startupConfig, template],
+    () => buildSandpackOptions(previewTemplate, startupConfig),
+    [startupConfig, previewTemplate],
   );
 
   if (Object.keys(artifactFiles).length === 0) {
@@ -54,10 +71,10 @@ export const ArtifactPreview = memo(function ({
 
   return (
     <SandpackProvider
-      files={{ ...artifactFiles, ...sharedFiles }}
+      files={previewFiles}
       options={options}
-      {...sharedProps}
-      template={template}
+      {...(offlineReact ? {} : sharedProps)}
+      template={previewTemplate}
     >
       <SandpackPreview
         showOpenInCodeSandbox={false}
