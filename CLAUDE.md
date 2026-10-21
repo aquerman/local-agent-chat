@@ -615,6 +615,27 @@ syncs conflict only here.
   `start_thread`, the thread ran after the reply, finished with a summary, showed done, and the
   coordinator's next turn had the summary in its system prompt.
 
+## Phone notifications
+
+- `packages/api/src/notifications`: a `Notifier` interface (`send({ title, body, url, priority })`)
+  with one channel, ntfy (`ntfy.ts`, JSON publish to the server root, optional Bearer token). Web Push
+  to the PWA can be a second `Notifier` later; it was not used first because iOS needs HTTPS and an
+  installed PWA, and the Tailscale setup is plain HTTP.
+- Routines: `createRoutineNotifications` (`routines.ts`) is passed to `createSchedulesService` as
+  `onRunOutcome` from `api/server/services/Schedules/index.js`. The service wraps
+  `recordRunOutcome` (`schedules/listener.ts`), which now resolves `true` only for the call that
+  applied a transition, so every settle path (live, reconciler, erasure) notifies exactly once.
+  The listener is not awaited and its errors are only logged: a notification never fails a run.
+- Events: `success` (title = routine name, body = first line of the last reply), `error`
+  ("<name> failed", priority 4), `requires_action` ("<name> needs your approval", priority 4).
+  `interrupted` and skips are silent. Tap URL is `<publicBaseUrl>/c/<conversationId>`.
+- Config: top-level `notifications` in `configSchema` (`packages/data-provider/src/config.ts`), off
+  by default. `bennychat.yaml` turns it on with every value from `.env` (`NTFY_TOPIC`, `NTFY_SERVER`,
+  `NTFY_TOKEN`, `BENNYCHAT_PUBLIC_URL`); an unset variable reads as absent, and no topic = no send.
+  One target per deployment (single-user install). Phone setup: README, "Phone notifications".
+- Verified 2026-10-20 in the Linux rig against a fake ntfy server (not the real app): a Run now of a
+  routine posted the expected JSON. Tests: `cd packages/api && npx jest src/notifications`.
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

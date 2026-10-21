@@ -15,6 +15,8 @@ export * from './code';
 export * from './auth';
 /* API Keys */
 export * from './apiKeys';
+/* Notifications */
+export * from './notifications';
 /* MCP */
 export * from './mcp/mcpConfig';
 export * from './mcp/authority';

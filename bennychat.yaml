@@ -306,6 +306,18 @@ mcpServers:
 # (port = PORT). See CLAUDE.md "Artifacts offline". React previews use it too (roadmap 5c
 # follow-up): their libraries are bundled from npm at build time, nothing to configure here.
 
+# Roadmap 15, phone notifications: ntfy push when a routine (scheduled chat) finishes, fails or
+# waits for approval. Values come from .env so no topic or address lands in git; with NTFY_TOPIC
+# unset nothing is sent. Phone setup: README, "Phone notifications".
+notifications:
+  enabled: true
+  publicBaseUrl: '${BENNYCHAT_PUBLIC_URL}' # tap opens <url>/c/<conversation>
+  includeReply: true # false keeps chat text off the ntfy server (generic body instead)
+  ntfy:
+    server: '${NTFY_SERVER}' # unset = https://ntfy.sh
+    topic: '${NTFY_TOPIC}'
+    token: '${NTFY_TOKEN}' # optional, for a protected topic
+
 # Roadmap 7: Memory. Upstream's memory agent extracts durable facts after each user turn and
 # every chat sees them in its system prompt; the user views/edits/deletes them under
 # Customize > Memories. The agent is a second, non-streaming request to llama-server that

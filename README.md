@@ -38,6 +38,9 @@ from a phone over Tailscale.
   Pages that only fill in with JavaScript are read again in a headless copy of the Microsoft Edge
   already installed on Windows (no browser download); `WEBSEARCH_RENDER` (`auto`, `always`, `off`)
   and `WEBSEARCH_BROWSER_PATH` in the server's `env` block change that.
+- **Phone notifications.** When a routine (scheduled chat) finishes, fails or waits for your
+  approval, BennyChat pushes a notification through [ntfy](https://ntfy.sh): the routine's name,
+  the first line of its reply, and a tap that opens the chat (optional, see below).
 - **Folder access.** The reference filesystem MCP server, scoped to folders you list in `.env`
   (`BENNY_FOLDERS`). The model can list, search and read files there freely; writing, editing,
   creating folders and moving files ask you first. Benny has it built in; plain model chats switch
@@ -153,6 +156,28 @@ In a chat, turn on **File Search** in the tools menu, then attach with **Upload 
 Use **Upload as Text** for files the model should read in full, and **Upload to Provider** only for
 images (llama-server cannot read PDF bytes). Agents with File Search use the same setup for their
 knowledge files.
+
+### Phone notifications (optional)
+
+Like Claude's task notifications: title = routine name, body = first line of the result, tap opens
+the conversation.
+
+1. Install the **ntfy** app on the phone (App Store / Play Store).
+2. Make a hard-to-guess topic name, for example
+   `node -e "console.log('bc-' + require('crypto').randomBytes(12).toString('hex'))"`.
+   On the public ntfy.sh server anyone who knows the name can read the topic, so treat it like a
+   password.
+3. In the app, tap **+** and subscribe to that topic (server `ntfy.sh`, or your own ntfy server).
+4. In `.env` set `NTFY_TOPIC=<the topic>`. Optional: `NTFY_SERVER=<your ntfy server>`,
+   `NTFY_TOKEN=<access token>` for a protected topic, and `BENNYCHAT_PUBLIC_URL=<the address the
+   phone uses for BennyChat>` (for example the machine's Tailscale address on port 3080) so a tap
+   opens the chat.
+5. Restart BennyChat. Run a routine with **Run now** to test.
+
+The `notifications` block in `bennychat.yaml` reads those variables; without `NTFY_TOPIC` nothing is
+sent. Set `includeReply: false` there to keep reply text off the ntfy server (the body then just says
+the routine finished). An iOS ntfy app gets instant delivery from ntfy.sh; a self-hosted server
+needs `upstream-base-url: https://ntfy.sh` for iOS push.
 
 ### Folder access (optional)
 

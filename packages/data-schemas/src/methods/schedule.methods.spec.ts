@@ -291,6 +291,31 @@ describe('getScheduleRunProject (occurrence scope, recorded vs unknown)', () => 
   });
 });
 
+describe('recordRunOutcome transition result', () => {
+  it('resolves true only for the call that moved the row', async () => {
+    const schedule = await methods.createSchedule(scheduleData());
+    const when = new Date('2026-07-24T12:00:00Z');
+    await methods.reserveStartedRun(runData(schedule, { scheduledFor: when }));
+    const outcome = {
+      scheduleId: schedule.id,
+      scheduledFor: when,
+      autoDisableAfterFailures: 5,
+    };
+
+    expect(await methods.recordRunOutcome({ ...outcome, status: 'requires_action' })).toBe(true);
+    expect(await methods.recordRunOutcome({ ...outcome, status: 'requires_action' })).toBe(false);
+    expect(await methods.recordRunOutcome({ ...outcome, status: 'success' })).toBe(true);
+    expect(await methods.recordRunOutcome({ ...outcome, status: 'success' })).toBe(false);
+    expect(
+      await methods.recordRunOutcome({
+        ...outcome,
+        scheduledFor: new Date('2030-01-01T00:00:00Z'),
+        status: 'error',
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('settledAt retention marker', () => {
   it('stamps settledAt on terminal outcomes but never on a pause', async () => {
     const schedule = await methods.createSchedule(scheduleData());

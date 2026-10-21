@@ -318,7 +318,10 @@ export type ScheduleMethods = {
   deleteSchedulesByUser: (userId: string | Types.ObjectId) => Promise<void>;
   getUnbookkeptRuns: (olderThan: Date, limit: number) => Promise<IScheduleRun[]>;
   finalizeBookkeeping: (params: RecordRunOutcomeParams) => Promise<void>;
-  recordRunOutcome: (params: RecordRunOutcomeParams) => Promise<void>;
+  /** Resolves `true` only for the call that moved the run row into this state (a fresh
+   *  pause or a terminal settlement); retries, re-affirmed pauses and no-match calls
+   *  resolve `false`, so a caller can act exactly once per transition. */
+  recordRunOutcome: (params: RecordRunOutcomeParams) => Promise<boolean>;
   recordSkippedRun: (
     data: Partial<IScheduleRun> & {
       scheduleId: string;
@@ -1394,7 +1397,7 @@ export function createScheduleMethods(mongoose: typeof import('mongoose')): Sche
    * guarded row transition but walks the balance-skip streak instead of the failure
    * streak — the owner's credits, not the schedule, are at fault.
    */
-  async function recordRunOutcome(params: RecordRunOutcomeParams): Promise<void> {
+  async function recordRunOutcome(params: RecordRunOutcomeParams): Promise<boolean> {
     const firedAt = new Date();
     if (params.status === 'requires_action') {
       // PAUSE (HITL): win the ROW transition first, then project the card. A read-then-
@@ -1439,7 +1442,7 @@ export function createScheduleMethods(mongoose: typeof import('mongoose')): Sche
         { new: false },
       );
       if (paused == null) {
-        return;
+        return false;
       }
       // Revision-fenced like the terminal path: an owner edit landing between the fire
       // and the approval must not have the OLD config's pause stamped on it. Without
@@ -1458,7 +1461,7 @@ export function createScheduleMethods(mongoose: typeof import('mongoose')): Sche
         params.scheduledFor,
         paused.configRevision != null ? { configRevision: paused.configRevision } : {},
       );
-      return;
+      return paused.status !== 'requires_action';
     }
     // TERMINAL: flip the run row (match-guarded), then apply bookkeeping. `bookkept` is
     // set false at the flip and true only after bookkeeping lands, so a crash between is
@@ -1497,7 +1500,7 @@ export function createScheduleMethods(mongoose: typeof import('mongoose')): Sche
     // No-match guard: never touch schedule bookkeeping without a matching run
     // (protects against a spoofed scheduleId on a normal chat).
     if (settled == null) {
-      return;
+      return false;
     }
     // SINGLE SEAM: the config fence is DERIVED here from the row being settled, not
     // passed in by each caller. Callers only say "this occurrence reached status X" and
@@ -1523,6 +1526,7 @@ export function createScheduleMethods(mongoose: typeof import('mongoose')): Sche
       { scheduleId: params.scheduleId, scheduledFor: params.scheduledFor },
       { $set: { bookkept: true } },
     );
+    return true;
   }
 
   async function recordSkippedRun(

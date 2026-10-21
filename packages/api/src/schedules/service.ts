@@ -17,6 +17,7 @@ import type { SerializableJobData } from '../stream/interfaces/IJobStore';
 import type { AgentCheckpointGeneration } from '../agents/checkpointer';
 import type { BalanceUpdateFields } from '../types/balance';
 import type { GetAppConfigOptions } from '../app/service';
+import type { ScheduleRunOutcome } from './listener';
 import {
   resolveScheduleProjectId,
   DEFAULT_SCHEDULE_LIMITS,
@@ -36,13 +37,14 @@ import { buildBalanceUpdateFields } from '../middleware/balance';
 import { getAppConfigOptionsFromUser } from '../app/service';
 import { isShutdownInProgress } from '../app/shutdown';
 import { startScheduleErasureSweep } from './erasure';
+import { withRunOutcomeListener } from './listener';
 import { getBalanceConfig } from '../app/config';
 import { startScheduleEngine } from './engine';
 import { withCapacitySlot } from './capacity';
 import { isEnabled } from '../utils/common';
 
 /** Recordable terminal/paused run outcome, as accepted by `recordRunOutcome`. */
-type ScheduleRunOutcomeStatus = Parameters<ScheduleMethods['recordRunOutcome']>[0]['status'];
+type ScheduleRunOutcomeStatus = ScheduleRunOutcome['status'];
 
 /** How a TERMINAL job status projects onto its run row. Mirrors the reconciler's
  *  mapping, so a run settled from a retained job reads the same either way. */
@@ -182,6 +184,13 @@ export interface SchedulesServiceDeps {
   /** Reads a durable trigger delivery by key from the merged agent-trigger service, for
    *  reconciliation's live-vs-dead delivery check. */
   getTriggerDelivery: ScheduleEngineDeps['getTriggerDelivery'];
+  /**
+   * Called once per run state transition that `recordRunOutcome` actually applied (a fresh
+   * pause or a terminal settlement), from every settlement path. Fire-and-forget: it is never
+   * awaited and its failure is only logged, so a slow or broken listener cannot delay or fail
+   * a run. Used for phone notifications.
+   */
+  onRunOutcome?: (outcome: ScheduleRunOutcome) => Promise<void>;
 }
 
 export interface SchedulesService {
@@ -298,7 +307,7 @@ export function createSchedulesService(
   deps: SchedulesServiceDeps,
   timings?: ScheduleServiceTimings,
 ): SchedulesService {
-  const { methods } = deps;
+  const methods = withRunOutcomeListener(deps.methods, deps.onRunOutcome);
 
   // Fail LOUDLY at construction, not per-fire. The JS adapter (api/server/services/
   // Schedules) is not typechecked against SchedulesServiceDeps, so a missing dep would
