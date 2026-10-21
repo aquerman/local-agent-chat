@@ -42,6 +42,10 @@ from a phone over Tailscale.
   (`BENNY_FOLDERS`). The model can list, search and read files there freely; writing, editing,
   creating folders and moving files ask you first. Benny has it built in; plain model chats switch
   it on with "Folders" in the MCP menu of the input bar (see below).
+- **Browser automation (opt-in).** A `browser` MCP server (`packages/browser`, built on Microsoft's
+  Playwright MCP) lets the model open and use web pages in the Microsoft Edge already installed on
+  Windows, in a window you can watch. Switch it on per chat in the MCP picker; it is never on by
+  default. See [Browser automation](#browser-automation-opt-in) for the safety settings.
 - **Search past chats.** LibreChat's sidebar search, backed by a local Meilisearch that
   `scripts\start-all.bat` starts from `bin\meilisearch.exe` (optional, see below).
 - **Retrieval for big files (optional).** LibreChat's RAG API with local embeddings: a file
@@ -186,6 +190,34 @@ endpoints:
 
 Tool calling (web search, agents) needs `llama-server --jinja` and a model whose chat template
 supports tools. The validated models are listed in local-llm's `CLAUDE.md`.
+
+## Browser automation (opt-in)
+
+The `browser` server drives a real browser for the model: it opens a page, reads it as text (an
+accessibility snapshot; the model has no vision, so no screenshots) and can click, type and fill
+forms. It is built to stay small and on a short leash:
+
+- **Only sites you list.** Set `BROWSER_ALLOWED_ORIGINS` in `.env` and restart, for example
+  `BROWSER_ALLOWED_ORIGINS=en.wikipedia.org;*.wikimedia.org`. With nothing set, the browser opens
+  nothing. Every request a page makes is filtered, so also list the hosts a site loads its scripts
+  and styles from, or it will look broken. A page that redirects to an unlisted site is closed.
+- **Its own profile.** It uses a separate Edge profile in `data\browser-profile`, never your normal
+  one, so it sees none of your logins, history or saved passwords. To let it work on a site that
+  needs a login, sign in once yourself in the window it opens; the profile remembers it. Delete the
+  folder to forget everything.
+- **It asks before acting.** Opening allowed pages and reading them runs on its own. Clicking,
+  typing, filling forms, choosing options, pressing keys and answering pop-ups show an approval card
+  first (Approve, "Always allow in this chat", Reject, Edit). It cannot run JavaScript, upload your
+  files or take screenshots: those tools are removed.
+- **Treat pages as untrusted.** A web page can contain text written to mislead the model. Read the
+  approval card before approving, especially on a form that sends, buys or deletes something.
+- **Small model, short tasks.** Snapshots are cut at about 3k tokens, so on a big page the model
+  has to search it (`find`). Expect short, specific tasks ("open X and look up Y", "fill in this
+  form") to work, and long, open-ended browsing to go wrong.
+
+Settings (all optional, in `.env`): `BROWSER_HEADLESS=true` hides the window,
+`BROWSER_PROFILE_DIR` moves the profile, `BROWSER_EXECUTABLE_PATH` picks another Chromium-based
+browser. To have Benny use it, add the Browser server's tools to the agent in Agent Builder.
 
 ## Routines (scheduled chats)
 
