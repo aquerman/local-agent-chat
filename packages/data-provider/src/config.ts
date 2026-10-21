@@ -3106,6 +3106,11 @@ export const projectThreadsConfigSchema = z.object({
   indexLimit: z.number().int().min(0).max(50).default(12),
   /** Longest brief or follow-up message a thread accepts. */
   briefMaxChars: z.number().int().min(200).max(20_000).default(4000),
+  /**
+   * Rewrites a thread's summary for the coordinator after the user talks to the thread directly
+   * (one short extra model call per turn); off keeps the summary of the thread's last own run.
+   */
+  summarizeUserTurns: z.boolean().default(false),
 });
 
 export type TProjectThreadsConfig = z.infer<typeof projectThreadsConfigSchema>;

@@ -107,6 +107,7 @@ export type {
   UpdateChatProjectInput,
 } from './chatProject';
 export type {
+  AdoptProjectThreadInput,
   ClaimedProjectThread,
   CreateProjectThreadInput,
   FinishProjectThreadInput,

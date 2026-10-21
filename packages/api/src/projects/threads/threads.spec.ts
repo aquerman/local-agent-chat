@@ -584,3 +584,149 @@ describe('resolveCoordinatorTools', () => {
     expect(getService).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('talking to a thread directly', () => {
+  const later = (ms: number) => new Date(Date.now() + ms);
+  const userMessage = (text: string, createdAt: Date): ThreadMessage => ({
+    messageId: `u-${Math.random()}`,
+    isCreatedByUser: true,
+    text,
+    createdAt,
+  });
+
+  function createUserTurnHarness(overrides: Partial<ProjectThreadServiceDeps> = {}) {
+    const requests: Array<{ followUp?: string; previous?: string; brief: string }> = [];
+    const harness = createHarness({
+      getConfig: async () => ({
+        enabled: true,
+        agentId: 'agent_benny',
+        concurrency: 1,
+        summaryMaxTokens: 20,
+        summarizeUserTurns: true,
+      }),
+      createSummarizer: () => async (request) => {
+        requests.push(request);
+        return `Summary: ${request.reply.slice(0, 40)}`;
+      },
+      ...overrides,
+    });
+    return { ...harness, requests };
+  }
+
+  it('rewrites the hand-back after the user prompts a finished thread', async () => {
+    const harness = createUserTurnHarness();
+    const thread = await start(harness);
+    await harness.service.pump();
+    await mongoose.models.Conversation.create({
+      user: userId,
+      conversationId: thread.conversationId,
+      endpoint: 'agents',
+      title: 'Find flights',
+    });
+    harness.messages.set(thread.conversationId, [reply('KLM at 89 euros on 12 May.')]);
+    await harness.service.handleSettled({
+      userId,
+      conversationId: thread.conversationId,
+      status: 'complete',
+    });
+
+    harness.messages.set(thread.conversationId, [
+      reply('KLM at 89 euros on 12 May.'),
+      userMessage('And in June?', later(1000)),
+      reply('TAP at 95 euros on 3 June.', { createdAt: later(2000) }),
+    ]);
+    await harness.service.handleSettled({
+      userId,
+      conversationId: thread.conversationId,
+      status: 'complete',
+    });
+
+    const updated = await db.getProjectThread(userId, thread._id!.toString());
+    expect(updated?.status).toBe('done');
+    expect(updated?.run).toBe('idle');
+    expect(updated?.summary).toBe('Summary: TAP at 95 euros on 3 June.');
+    expect(harness.requests[1]).toMatchObject({
+      followUp: 'And in June?',
+      previous: 'Summary: KLM at 89 euros on 12 May.',
+    });
+    expect(harness.enqueued).toHaveLength(1);
+
+    await harness.service.handleSettled({
+      userId,
+      conversationId: thread.conversationId,
+      status: 'complete',
+    });
+    expect(harness.requests).toHaveLength(2);
+  });
+
+  it('leaves the hand-back alone when the option is off', async () => {
+    const harness = createHarness({
+      getConfig: async () => ({ enabled: true, concurrency: 1, summaryMaxTokens: 20 }),
+    });
+    const thread = await start(harness);
+    await harness.service.pump();
+    harness.messages.set(thread.conversationId, [reply('KLM at 89 euros on 12 May.')]);
+    await harness.service.handleSettled({
+      userId,
+      conversationId: thread.conversationId,
+      status: 'complete',
+    });
+    harness.messages.set(thread.conversationId, [
+      userMessage('And in June?', later(1000)),
+      reply('TAP at 95 euros on 3 June.', { createdAt: later(2000) }),
+    ]);
+    await harness.service.handleSettled({
+      userId,
+      conversationId: thread.conversationId,
+      status: 'complete',
+    });
+    const unchanged = await db.getProjectThread(userId, thread._id!.toString());
+    expect(unchanged?.summary).toBe('Summary: KLM at 89 euros on 12 May.');
+  });
+
+  it('records a chat the user started in the project as a thread, but not the coordinator', async () => {
+    const harness = createUserTurnHarness({
+      getProjectChat: async (_user, conversationId) => ({
+        projectId: 'p1',
+        coordinatorConversationId: 'coord',
+        agentId: conversationId === 'own' ? 'ephemeral' : null,
+        title: 'New Chat',
+      }),
+    });
+    await mongoose.models.Conversation.create({
+      user: userId,
+      conversationId: 'own',
+      endpoint: 'agents',
+      title: 'Packing',
+    });
+    harness.messages.set('own', [
+      userMessage('Make a packing list for Lisbon', new Date()),
+      reply('Light jacket, sandals, adapter.'),
+    ]);
+    harness.messages.set('coord', [
+      userMessage('Plan the trip', new Date()),
+      reply('Starting threads.'),
+    ]);
+
+    await harness.service.handleSettled({ userId, conversationId: 'own', status: 'complete' });
+    await harness.service.handleSettled({ userId, conversationId: 'coord', status: 'complete' });
+
+    const adopted = await db.getProjectThreadByConversation(userId, 'own');
+    expect(adopted).toMatchObject({
+      projectId: 'p1',
+      agentId: 'agent_benny',
+      title: 'Make a packing list for Lisbon',
+      brief: 'Make a packing list for Lisbon',
+      status: 'done',
+      run: 'idle',
+      summary: 'Summary: Light jacket, sandals, adapter.',
+    });
+    const convo = await mongoose.models.Conversation.findOne({ conversationId: 'own' }).lean<{
+      threadStatus?: string;
+      title?: string;
+    }>();
+    expect(convo).toMatchObject({ threadStatus: 'done', title: 'Packing' });
+    expect(await db.getProjectThreadByConversation(userId, 'coord')).toBeNull();
+    expect(harness.enqueued).toHaveLength(0);
+  });
+});

@@ -457,3 +457,6 @@ projects:
     summaryMaxTokens: 300
     indexLimit: 12
     briefMaxChars: 4000
+    # Talking to a thread yourself (or to a chat you started in the project) rewrites its
+    # summary for the coordinator after each reply: one short extra request, thinking off.
+    summarizeUserTurns: true

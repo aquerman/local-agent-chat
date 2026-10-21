@@ -3032,6 +3032,7 @@
   "com_ui_thread_status_done": "Done",
   "com_ui_thread_status_failed": "Failed",
   "com_ui_project_chat": "Project chat",
+  "com_ui_project_chat_back": "Back to the project chat of {{name}}",
   "com_ui_project_chat_hint": "Plans the work and starts threads",
   "com_ui_project_overview": "Project overview",
   "com_ui_project_panel_toggle": "Project threads",

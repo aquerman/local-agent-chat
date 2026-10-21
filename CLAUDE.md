@@ -618,6 +618,14 @@ syncs conflict only here.
   then threads and other project chats newest first with live status and summary, then
   instructions and files. A thread is an ordinary chat, so opening it is how the user talks to it.
   Header button toggles it (persisted `projectPanelOpen`); below 1024px it is a drawer.
+- Prompting a thread: open it and type; it is the thread's own chat, agent and history. With
+  `projects.threads.summarizeUserTurns` (on in `bennychat.yaml`), each completed user turn in an
+  idle thread rewrites its summary (`handleUserTurn` in `service.ts`, prompt gets the previous
+  summary and the user's message), so the coordinator's next turn sees the new result. A chat the
+  user starts in the project (panel "+") is recorded as an idle thread after its first reply
+  (`adoptProjectThread`; agent = the chat's saved agent, else `threads.agentId`), so the
+  coordinator can list, read and post to it too. A header crumb in a thread leads back to the
+  project chat.
 - The sidebar's Chats list asks for `projectId: 'unassigned'`, so project chats show only under
   their project; a search or the archive view still lists every chat.
 

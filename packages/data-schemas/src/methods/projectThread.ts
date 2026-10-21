@@ -20,6 +20,9 @@ export type CreateProjectThreadInput = {
   input: string;
 };
 
+/** A chat the user started in a project themselves, recorded as a thread after its first turn. */
+export type AdoptProjectThreadInput = Omit<CreateProjectThreadInput, 'input'>;
+
 /** A thread claimed for one run, with the input that run sends. */
 export type ClaimedProjectThread = {
   thread: IProjectThread;
@@ -37,6 +40,8 @@ export type FinishProjectThreadInput = {
 export interface ProjectThreadMethods {
   createProjectThread(input: CreateProjectThreadInput): Promise<IProjectThread>;
   getProjectThread(user: string, threadId: string): Promise<IProjectThread | null>;
+  /** Records a user-started project chat as an idle thread; returns the existing one if any. */
+  adoptProjectThread(input: AdoptProjectThreadInput): Promise<IProjectThread | null>;
   getProjectThreadByConversation(
     user: string,
     conversationId: string,
@@ -67,6 +72,11 @@ export interface ProjectThreadMethods {
     threadId: string,
     input: FinishProjectThreadInput,
   ): Promise<IProjectThread | null>;
+  /**
+   * Records a new hand-back after the user talked to an idle thread directly: the thread counts
+   * as done with this summary. Null when the thread is queued or running again.
+   */
+  updateIdleProjectThreadSummary(threadId: string, summary: string): Promise<IProjectThread | null>;
   /** Moves a dispatched thread between working and needs_you; null when nothing changed. */
   setDispatchedProjectThreadStatus(
     threadId: string,
@@ -115,6 +125,30 @@ export function createProjectThreadMethods(
     }
     return await model()
       .findOne({ _id: new mongoose.Types.ObjectId(threadId), user })
+      .lean<IProjectThread>();
+  }
+
+  async function adoptProjectThread(input: AdoptProjectThreadInput): Promise<IProjectThread | null> {
+    return await model()
+      .findOneAndUpdate(
+        { user: input.user, conversationId: input.conversationId },
+        {
+          $setOnInsert: {
+            user: input.user,
+            ...(input.tenantId != null && { tenantId: input.tenantId }),
+            projectId: input.projectId,
+            conversationId: input.conversationId,
+            coordinatorConversationId: input.coordinatorConversationId ?? null,
+            agentId: input.agentId,
+            title: input.title,
+            brief: input.brief,
+            status: 'done',
+            run: 'idle',
+            runCount: 0,
+          },
+        },
+        { upsert: true, new: true },
+      )
       .lean<IProjectThread>();
   }
 
@@ -268,6 +302,22 @@ export function createProjectThreadMethods(
       .lean<IProjectThread>();
   }
 
+  async function updateIdleProjectThreadSummary(
+    threadId: string,
+    summary: string,
+  ): Promise<IProjectThread | null> {
+    if (!isValidObjectIdString(threadId)) {
+      return null;
+    }
+    return await model()
+      .findOneAndUpdate(
+        { _id: new mongoose.Types.ObjectId(threadId), run: 'idle' },
+        { $set: { status: 'done', summary, error: '', finishedAt: new Date() } },
+        { new: true },
+      )
+      .lean<IProjectThread>();
+  }
+
   async function setDispatchedProjectThreadStatus(
     threadId: string,
     status: Extract<ProjectThreadStatus, 'working' | 'needs_you'>,
@@ -308,6 +358,7 @@ export function createProjectThreadMethods(
   return {
     createProjectThread,
     getProjectThread,
+    adoptProjectThread,
     getProjectThreadByConversation,
     listProjectThreads,
     listFinishedProjectThreads,
@@ -318,6 +369,7 @@ export function createProjectThreadMethods(
     beginProjectThreadSettle,
     requeueProjectThread,
     finishProjectThread,
+    updateIdleProjectThreadSummary,
     setDispatchedProjectThreadStatus,
     setConversationThreadStatus,
     deleteProjectThreadsForProject,
