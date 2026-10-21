@@ -118,6 +118,7 @@ import { resolveToolRoleGrants } from '~/tools/rolePermissions';
 import { createRequestAgentExecutionContext } from './runtime';
 import { resolveTurnDeliveryRouting } from './files/delivery';
 import { filterFilesByEndpointRuntimeConfig } from '~/files';
+import { selectRequestModelParameters } from './thinking';
 import { hasActiveFileFieldPolicy } from '~/protection';
 import { PARTIAL_RESOLVED_CONVERSATION } from './guard';
 import { applyBackgroundToolCalls } from './background';
@@ -870,6 +871,11 @@ export interface InitializeAgentParams {
   allowedProviders: Set<string>;
   /** Whether this is the initial agent */
   isInitialAgent?: boolean;
+  /**
+   * The chat project's system block (instructions and inline knowledge). Appended to the
+   * agent's stable `instructions`, after its own, so the prompt prefix stays cacheable.
+   */
+  projectInstructions?: string;
   /** Accessible skill IDs for this user (pre-computed by the caller via ACL query) */
   accessibleSkillIds?: import('mongoose').Types.ObjectId[];
   /** Whether skill file authoring should be exposed even before a user has viewable skills. */
@@ -1277,18 +1283,6 @@ export async function initializeAgent(
 
   let currentFiles: Array<IMongoFile | TFile> | undefined;
 
-  const _modelOptions = structuredClone(
-    Object.assign(
-      { model: agent.model },
-      agent.model_parameters ?? { model: agent.model },
-      isInitialAgent === true ? endpointOption?.model_parameters : {},
-    ),
-  );
-
-  const { resendFiles, maxContextTokens, imageDetail, modelOptions } = extractLibreChatParams(
-    _modelOptions as Record<string, unknown>,
-  );
-
   const provider = agent.provider;
   agent.endpoint = provider;
 
@@ -1303,6 +1297,24 @@ export async function initializeAgent(
   if (overrideProvider !== agent.provider) {
     agent.provider = overrideProvider;
   }
+
+  const _modelOptions = structuredClone(
+    Object.assign(
+      { model: agent.model },
+      agent.model_parameters ?? { model: agent.model },
+      isInitialAgent === true
+        ? selectRequestModelParameters({
+            requestEndpoint: endpointOption?.endpoint,
+            requestParameters: endpointOption?.model_parameters,
+            customEndpointConfig,
+          })
+        : {},
+    ),
+  );
+
+  const { resendFiles, maxContextTokens, imageDetail, modelOptions } = extractLibreChatParams(
+    _modelOptions as Record<string, unknown>,
+  );
 
   const finalModelOptions = {
     ...modelOptions,
@@ -2264,6 +2276,12 @@ export async function initializeAgent(
     } else {
       agent.instructions = resolvedInstructions;
     }
+  }
+
+  if (params.projectInstructions) {
+    agent.instructions = [agent.instructions, params.projectInstructions]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   const repositoryInstructionBlock = repositoryInstructionSource

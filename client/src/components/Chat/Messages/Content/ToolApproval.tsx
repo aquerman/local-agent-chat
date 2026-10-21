@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { Button, TextareaAutosize } from '@librechat/client';
-import { Check, X, Pencil, MessageSquare, TriangleAlert } from 'lucide-react';
+import { Check, X, Pencil, CheckCheck, MessageSquare, TriangleAlert } from 'lucide-react';
 import type { Agents } from 'librechat-data-provider';
 import type { TranslationKeys } from '~/hooks';
 import { boundApprovalLabel } from '~/components/Chat/approval/preview';
@@ -110,12 +110,13 @@ export default function ToolApproval({
       : seedArgs(args);
   const decisionDraft = getDecisionDraft(actionId, toolCallId) ?? {
     active: initialDecision?.decision ?? null,
+    session: initialDecision?.decision === 'approve' && initialDecision.scope === 'session',
     editText: initialEditText,
     responseText:
       initialDecision?.decision === 'respond' ? (initialDecision.responseText ?? '') : '',
     reason: initialDecision?.decision === 'reject' ? (initialDecision.reason ?? '') : '',
   };
-  const { active, editText, responseText, reason } = decisionDraft;
+  const { active, session = false, editText, responseText, reason } = decisionDraft;
   const updateDecisionDraft = (updates: Partial<typeof decisionDraft>) =>
     setDecisionDraft(actionId, toolCallId, { ...decisionDraft, ...updates });
 
@@ -142,7 +143,11 @@ export default function ToolApproval({
       return;
     }
     if (active === 'approve') {
-      setDecision(actionId, toolCallId, { tool_call_id: toolCallId, decision: 'approve' });
+      setDecision(actionId, toolCallId, {
+        tool_call_id: toolCallId,
+        decision: 'approve',
+        ...(session && { scope: 'session' as const }),
+      });
       return;
     }
     if (active === 'reject') {
@@ -178,7 +183,7 @@ export default function ToolApproval({
         setDecision(actionId, toolCallId, null);
       }
     }
-  }, [active, editText, responseText, reason, locked, setDecision, actionId, toolCallId]);
+  }, [active, session, editText, responseText, reason, locked, setDecision, actionId, toolCallId]);
 
   const editIsValid = useMemo(() => {
     if (active !== 'edit') {
@@ -221,14 +226,17 @@ export default function ToolApproval({
       <div className="flex flex-wrap gap-2">
         {allowedDecisions.map((decision) => {
           const Icon = DECISION_ICON[decision];
+          const pressed = active === decision && !(decision === 'approve' && session);
           return (
             <Button
               key={decision}
               size="sm"
-              variant={active === decision ? 'default' : 'outline'}
+              variant={pressed ? 'default' : 'outline'}
               disabled={locked}
-              aria-pressed={active === decision}
-              onClick={() => updateDecisionDraft({ active: active === decision ? null : decision })}
+              aria-pressed={pressed}
+              onClick={() =>
+                updateDecisionDraft({ active: pressed ? null : decision, session: false })
+              }
               className="inline-flex items-center gap-1.5"
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
@@ -236,6 +244,25 @@ export default function ToolApproval({
             </Button>
           );
         })}
+        {allowedDecisions.includes('approve') && (
+          <Button
+            size="sm"
+            variant={active === 'approve' && session ? 'default' : 'outline'}
+            disabled={locked}
+            aria-pressed={active === 'approve' && session}
+            onClick={() =>
+              updateDecisionDraft(
+                active === 'approve' && session
+                  ? { active: null, session: false }
+                  : { active: 'approve', session: true },
+              )
+            }
+            className="inline-flex items-center gap-1.5"
+          >
+            <CheckCheck className="h-4 w-4" aria-hidden="true" />
+            {localize('com_ui_approve_for_chat')}
+          </Button>
+        )}
       </div>
 
       {active === 'edit' && (

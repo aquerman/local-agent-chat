@@ -2,7 +2,7 @@ import React from 'react';
 import { RecoilRoot } from 'recoil';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { Agents } from 'librechat-data-provider';
-import ApprovalProvider from '../ApprovalContext';
+import ApprovalProvider, { useApprovalContext } from '../ApprovalContext';
 import ToolApproval from '../ToolApproval';
 
 jest.mock('~/hooks', () => ({
@@ -12,6 +12,7 @@ jest.mock('~/hooks', () => ({
     }
     const map: Record<string, string> = {
       com_ui_approve: 'Approve',
+      com_ui_approve_for_chat: 'Always allow in this chat',
       com_ui_reject: 'Reject',
       com_ui_edit: 'Edit',
       com_ui_respond: 'Respond',
@@ -48,7 +49,43 @@ const renderCards = (cards: React.ReactNode) =>
     </RecoilRoot>,
   );
 
+/** Shows the batch the card recorded, exactly as submit would send it. */
+function DecisionProbe() {
+  const { getDecisions, version } = useApprovalContext();
+  return <output data-version={version}>{JSON.stringify(getDecisions('action-1'))}</output>;
+}
+
 describe('ToolApproval', () => {
+  test('"Always allow in this chat" approves with session scope; Approve stays once', () => {
+    renderCards(
+      <>
+        <ToolApproval approval={approval()} toolCallId="call-1" args={{ a: 1 }} />
+        <DecisionProbe />
+      </>,
+    );
+    const always = screen.getByRole('button', { name: 'Always allow in this chat' });
+    const approve = screen.getByRole('button', { name: 'Approve' });
+
+    fireEvent.click(always);
+    expect(always).toHaveAttribute('aria-pressed', 'true');
+    expect(approve).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled();
+    expect(JSON.parse(screen.getByRole('status').textContent ?? '[]')).toEqual([
+      { tool_call_id: 'call-1', decision: 'approve', scope: 'session' },
+    ]);
+
+    fireEvent.click(approve);
+    expect(always).toHaveAttribute('aria-pressed', 'false');
+    expect(JSON.parse(screen.getByRole('status').textContent ?? '[]')).toEqual([
+      { tool_call_id: 'call-1', decision: 'approve' },
+    ]);
+  });
+
+  test('offers "Always allow in this chat" only when approving is allowed', () => {
+    renderCards(<ToolApproval approval={approval(['reject'])} toolCallId="call-1" args={{}} />);
+    expect(screen.queryByRole('button', { name: 'Always allow in this chat' })).toBeNull();
+  });
+
   test('enables Submit immediately after Approve is the first decision (#14390)', () => {
     renderCards(<ToolApproval approval={approval()} toolCallId="call-1" args={{ a: 1 }} />);
 

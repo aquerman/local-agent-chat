@@ -14,6 +14,7 @@ const {
   GENERATION_RECOVERY_FAILED_ERROR,
   isPendingActionStale,
   resolveToolApprovalResume,
+  rememberSessionApprovals,
   resolveAskUserQuestionResume,
   buildResolvedAskUserQuestion,
   appendResolvedAskUserQuestion,
@@ -79,6 +80,7 @@ const {
   markAgentEventActorDetachedActionRunning,
   settleAgentEventActorDetachedAction,
   appendConvoMessageReference,
+  addConversationApprovedTools,
 } = require('~/models');
 const {
   acquireEventChildGenerationLease,
@@ -957,6 +959,13 @@ const ResumeAgentController = async (req, res, next, initializeClient, addTitle)
       generationProtocolVersion,
     );
   }
+  await rememberSessionApprovals({
+    pendingAction,
+    body: req.body,
+    userId,
+    conversationId,
+    addConversationApprovedTools,
+  });
   let resolvedAskContentIndex;
   let resolvedAskContentMissing = false;
   if (pendingAction.payload.type === 'ask_user_question' && !pendingAction.payload.tool_call_id) {

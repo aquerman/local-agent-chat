@@ -9,6 +9,8 @@ import type {
   TUpdateChatProjectRequest,
   TAssignConversationToProjectRequest,
   TAssignConversationToProjectResponse,
+  TAddChatProjectKnowledgeRequest,
+  TRemoveChatProjectKnowledgeRequest,
 } from 'librechat-data-provider';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { enqueue, invalidateConversationLists } from '~/utils';
@@ -216,3 +218,29 @@ export const useAssignConversationToProjectMutation = (): UseMutationResult<
     },
   );
 };
+
+const useProjectKnowledgeMutation = <TPayload>(
+  mutationFn: (payload: TPayload) => Promise<TChatProject>,
+): UseMutationResult<TChatProject, unknown, TPayload, unknown> => {
+  const queryClient = useQueryClient();
+  return useMutation(mutationFn, {
+    onSuccess: (project) => {
+      queryClient.setQueryData([QueryKeys.project, project._id], project);
+      queryClient.invalidateQueries([QueryKeys.projectKnowledge, project._id]);
+    },
+  });
+};
+
+export const useAddProjectKnowledgeMutation = (): UseMutationResult<
+  TChatProject,
+  unknown,
+  TAddChatProjectKnowledgeRequest,
+  unknown
+> => useProjectKnowledgeMutation(dataService.addProjectKnowledge);
+
+export const useRemoveProjectKnowledgeMutation = (): UseMutationResult<
+  TChatProject,
+  unknown,
+  TRemoveChatProjectKnowledgeRequest,
+  unknown
+> => useProjectKnowledgeMutation(dataService.removeProjectKnowledge);

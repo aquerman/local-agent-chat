@@ -174,6 +174,11 @@ export const projects = (params: q.ProjectListParams = {}) => {
 
 export const projectById = (id: string) => `${projectsRoot}/${encodeURIComponent(id)}`;
 
+export const projectKnowledge = (id: string, fileId?: string) =>
+  `${projectById(id)}/knowledge${fileId ? `/${encodeURIComponent(fileId)}` : ''}`;
+
+export const projectThreads = (id: string) => `${projectById(id)}/threads`;
+
 export const projectConversation = (conversationId: string) =>
   `${projectsRoot}/conversations/${encodeURIComponent(conversationId)}`;
 

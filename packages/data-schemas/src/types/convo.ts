@@ -282,6 +282,8 @@ export interface IConversation extends Document {
   imageDetail?: string;
   agent_id?: string;
   codeApprovalMode?: CodeApprovalMode;
+  /** Tool names approved for the rest of this conversation ("always allow in this chat"). */
+  approvedTools?: string[];
   /** Private fence advanced when an admitted generation reads its decision. */
   codeEnvironmentRevision?: number;
   codeEnvironmentMode?: CodeEnvironmentMode;
@@ -319,6 +321,8 @@ export interface IConversation extends Document {
   spec?: string;
   tags?: string[];
   chatProjectId?: string | null;
+  /** Set on a project task thread's chat; mirrors the thread record for list badges. */
+  threadStatus?: 'working' | 'needs_you' | 'done' | 'failed';
   tools?: string[];
   maxContextTokens?: number;
   max_tokens?: number;

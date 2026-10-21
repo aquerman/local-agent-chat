@@ -41,6 +41,9 @@ const {
   encodeAndFormatVideos,
   extractFileContext,
   createScheduleUpstreamTokenProviderResolver,
+  loadProjectRunContext,
+  getThreadsSettings,
+  resolveCoordinatorTools,
 } = require('@librechat/api');
 const {
   ResourceType,
@@ -100,6 +103,7 @@ const {
   createDeadBackgroundToolClaimRecovery,
 } = require('./backgroundCompletion');
 const { logViolation } = require('~/cache');
+const { getProjectThreadService } = require('~/server/services/Projects/threads');
 const db = require('~/models');
 const { getAppConfig } = require('~/server/services/Config');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
@@ -282,6 +286,23 @@ const initializeClientWithProvider = async ({
     codeCapabilityEnabled || fileSearchCapabilityEnabled
       ? resolveToolRoleGrants({ req, getRoleByName: db.getRoleByName, context: 'initializeClient' })
       : null;
+  /** The chat project's instructions and knowledge, resolved beside the other startup reads. */
+  const projectRunContextPromise = requestConversationPromise.then((conversation) =>
+    loadProjectRunContext(
+      {
+        userId: req.user.id,
+        conversationId,
+        conversation,
+        requestedProjectId: endpointOption.chatProjectId,
+        projectsConfig: appConfig?.config?.projects,
+        retrievalAvailable: false,
+      },
+      {
+        ...db,
+        conversationExists: async (userId, id) => (await db.getConvo(userId, id)) != null,
+      },
+    ),
+  );
   const backgroundToolsAvailable = enabledCapabilities.has(AgentCapabilities.run_in_background);
   const toolIntentsAvailable = enabledCapabilities.has(AgentCapabilities.tool_intents);
   const deferredToolsAvailable = enabledCapabilities.has(AgentCapabilities.deferred_tools);
@@ -595,6 +616,7 @@ const initializeClientWithProvider = async ({
     { primaryAgent, modelsConfig },
     requestConversation,
     toolRoleGrants,
+    projectRunContext,
   ] = await Promise.all([
     memoryAvailablePromise,
     accessibleSkillIdsPromise,
@@ -604,6 +626,7 @@ const initializeClientWithProvider = async ({
     validatedPrimaryAgentPromise,
     requestConversationPromise,
     toolRoleGrantsPromise,
+    projectRunContextPromise,
   ]);
   /** Preserve the owner-scoped fallback for loaders that share this request. */
   req.resolvedConversation = requestConversation;
@@ -733,6 +756,7 @@ const initializeClientWithProvider = async ({
       endpointOption,
       allowedProviders,
       isInitialAgent: true,
+      projectInstructions: projectRunContext?.instructions,
       accessibleSkillIds: primaryScopedSkillIds,
       skillAuthoringAvailable: primarySkillAuthoringAvailable,
       codeEnvAvailable,
@@ -771,6 +795,19 @@ const initializeClientWithProvider = async ({
       getRoleByName: db.getRoleByName,
     },
   );
+
+  /** Roadmap P1b/P1c: the project's coordinator chat gets the thread tools. */
+  primaryConfig.hostGraphTools = resolveCoordinatorTools({
+    role: projectRunContext?.role,
+    projectId: projectRunContext?.projectId,
+    userId: req.user.id,
+    tenantId: req.user.tenantId,
+    conversationId,
+    agentId: primaryConfig.id,
+    agentIsEphemeral: isEphemeralAgentId(primaryConfig.id),
+    threads: getThreadsSettings(appConfig?.config?.projects),
+    getService: getProjectThreadService,
+  });
 
   /** Price emitted usage with the primary agent's resolved endpoint config so
    *  custom-endpoint agents reflect configured rates (mirrors the AgentClient

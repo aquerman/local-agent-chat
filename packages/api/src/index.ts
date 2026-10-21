@@ -40,6 +40,7 @@ export * from './mcp/assistants';
 export * from './mcp/request';
 export * from './mcp/reinitialize';
 export * from './mcp/icons';
+export * from './mcp/files';
 /* Utilities */
 export * from './mcp/utils';
 export * from './mcp/domainValidation';

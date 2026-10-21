@@ -52,6 +52,8 @@ export {
   MAX_GRAPH_SUBAGENT_MEMBERS,
   MAX_CHAT_PROJECT_NAME_LENGTH,
   MAX_CHAT_PROJECT_DESCRIPTION_LENGTH,
+  MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH,
+  MAX_CHAT_PROJECT_KNOWLEDGE_FILES,
   DEFAULT_RETAINED_ANSWER_TOKENS,
   DEFAULT_MAX_RETAINED_TOOL_COUNT_CHARS,
 } from './limits';
@@ -3085,6 +3087,37 @@ export type TOpenIdDiscoveryConfig = z.infer<typeof openIdDiscoverySchema>;
 /** Maximum CAS attempts per ACL document, including the initial attempt. */
 export const permissionWriteAttemptsSchema = z.number().int().min(1).max(100).default(3);
 
+/**
+ * Fork option (BennyChat roadmap P1a): how a chat project's knowledge files reach its chats.
+ * Knowledge whose extracted text fits `knowledgeInlineTokens` (estimated at 4 characters per
+ * token) goes into the system prompt in full, like Claude Projects. Past it, chats get as much
+ * text as fits, file by file.
+ */
+export const projectThreadsConfigSchema = z.object({
+  /** Gives each project's coordinator chat the thread tools; off reproduces plain projects. */
+  enabled: z.boolean().default(false),
+  /** Agent that runs a thread when the coordinator chat has no saved agent (a plain endpoint chat). */
+  agentId: z.string().trim().min(1).optional(),
+  /** Background threads that may generate at once; one per GPU slot. */
+  concurrency: z.number().int().min(1).max(8).default(1),
+  /** Cap on the summary each thread hands back to the coordinator. */
+  summaryMaxTokens: z.number().int().min(50).max(2000).default(300),
+  /** Finished threads listed in the coordinator's system prompt, newest first. */
+  indexLimit: z.number().int().min(0).max(50).default(12),
+  /** Longest brief or follow-up message a thread accepts. */
+  briefMaxChars: z.number().int().min(200).max(20_000).default(4000),
+});
+
+export type TProjectThreadsConfig = z.infer<typeof projectThreadsConfigSchema>;
+
+export const projectsConfigSchema = z.object({
+  knowledgeInlineTokens: z.number().int().nonnegative().max(200_000).default(6000),
+  /** Fork option (BennyChat roadmap P1b/P1c): coordinator chat and background task threads. */
+  threads: projectThreadsConfigSchema.default({}),
+});
+
+export type TProjectsConfig = z.infer<typeof projectsConfigSchema>;
+
 export const configSchema = z.object({
   version: z.string(),
   permissions: z.object({ maxWriteAttempts: permissionWriteAttemptsSchema }).optional(),
@@ -3095,6 +3128,7 @@ export const configSchema = z.object({
   memory: memorySchema.optional(),
   notifications: notificationsSchema.optional(),
   summarization: summarizationConfigSchema.optional(),
+  projects: projectsConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
   secureImageLinks: z.boolean().optional(),
   imageOutputType: z.nativeEnum(EImageOutputType).default(EImageOutputType.PNG),

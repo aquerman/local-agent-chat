@@ -42,6 +42,8 @@ const convoSchema: Schema<IConversation> = new Schema(
     },
     ...conversationPreset,
     codeEnvironmentRevision: { type: Number, select: false },
+    /** Tools the user chose "always allow in this chat" for; read by the tool-approval policy. */
+    approvedTools: { type: [String], default: undefined, select: false },
     agent_id: {
       type: String,
     },
@@ -365,6 +367,11 @@ const convoSchema: Schema<IConversation> = new Schema(
       type: String,
       default: null,
       index: true,
+    },
+    /** Fork (roadmap P1b): status of the project task thread this chat runs, if any. */
+    threadStatus: {
+      type: String,
+      enum: ['working', 'needs_you', 'done', 'failed'],
     },
     files: {
       type: [String],

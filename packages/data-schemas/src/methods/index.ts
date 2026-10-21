@@ -67,6 +67,7 @@ import { createCategoriesMethods, type CategoriesMethods } from './categories';
 import { createPresetMethods, type PresetMethods } from './preset';
 /* Tier 2 — Moderate (service deps injected) */
 import { createConversationTagMethods, type ConversationTagMethods } from './conversationTag';
+import { createToolApprovalMethods, type ToolApprovalMethods } from './toolApprovals';
 import { createConversationImportMethods, type ConversationImportMethods } from './import';
 import {
   createMessageMethods,
@@ -88,7 +89,14 @@ import {
   type ParentSubagentThreadRecord,
 } from './conversation';
 import { createChatProjectMethods, type ChatProjectMethods } from './chatProject';
+import { createProjectThreadMethods, type ProjectThreadMethods } from './projectThread';
+export {
+  CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR,
+  CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND,
+} from './chatProject';
 export type {
+  ChatProjectKnowledgeFile,
+  ChatProjectKnowledgeText,
   AssignConversationToProjectResult,
   ChatProjectSortBy,
   ChatProjectSortDirection,
@@ -98,6 +106,11 @@ export type {
   ListChatProjectsResult,
   UpdateChatProjectInput,
 } from './chatProject';
+export type {
+  ClaimedProjectThread,
+  CreateProjectThreadInput,
+  FinishProjectThreadInput,
+} from './projectThread';
 /* Tier 3 — Complex (heavier injection) */
 import {
   createTxMethods,
@@ -253,10 +266,12 @@ export type AllMethods = UserMethods &
   CategoriesMethods &
   PresetMethods &
   ConversationTagMethods &
+  ToolApprovalMethods &
   ConversationImportMethods &
   MessageMethods &
   ConversationMethods &
   ChatProjectMethods &
+  ProjectThreadMethods &
   TxMethods &
   TransactionMethods &
   SpendTokensMethods &
@@ -485,10 +500,12 @@ export function createMethods(
     ...createPresetMethods(mongoose),
     /* Tier 2 */
     ...createConversationTagMethods(mongoose),
+    ...createToolApprovalMethods(mongoose),
     ...createConversationImportMethods(mongoose),
     ...messageMethods,
     ...conversationMethods,
     ...createChatProjectMethods(mongoose),
+    ...createProjectThreadMethods(mongoose),
     /* Tier 3 */
     ...txMethods,
     ...transactionMethods,
@@ -540,6 +557,7 @@ export type {
   CategoriesMethods,
   PresetMethods,
   ConversationTagMethods,
+  ToolApprovalMethods,
   ConversationImportMethods,
   MessageMethods,
   ParentSubagentTaskRecord,
@@ -553,6 +571,7 @@ export type {
   ConversationMethods,
   AgentEventActorReconciliationStorageMetrics,
   ChatProjectMethods,
+  ProjectThreadMethods,
   TxMethods,
   TransactionMethods,
   SpendTokensMethods,

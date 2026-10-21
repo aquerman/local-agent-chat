@@ -78,7 +78,11 @@ export default function Presentation({ children }: { children: React.ReactNode }
     [resetCurrentArtifactId, resetSelectedSubagent, setArtifactsVisibility],
   );
 
-  const filePanelContext = useMemo<FilePanelContextValue>(() => ({ openFile }), [openFile]);
+  const openFileId = panelFile?.file.file_id ?? null;
+  const filePanelContext = useMemo<FilePanelContextValue>(
+    () => ({ openFile, closeFile: closeFilePanel, openFileId }),
+    [openFile, closeFilePanel, openFileId],
+  );
 
   const setFilesToDelete = useSetFilesToDelete();
 
@@ -167,7 +171,7 @@ export default function Presentation({ children }: { children: React.ReactNode }
     }
     return (
       <FilePanel
-        key={panelFile.file.file_id}
+        key={`${panelFile.file.file_id}:${panelFile.file.updatedAt ?? ''}:${panelFile.file.bytes ?? ''}`}
         file={panelFile.file}
         kind={panelFile.kind}
         onClose={closeFilePanel}

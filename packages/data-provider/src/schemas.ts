@@ -1172,6 +1172,8 @@ export const tConversationSchema = z.object({
   /* DB */
   tags: z.array(z.string()).optional(),
   chatProjectId: z.string().nullable().optional(),
+  /** Set when the chat is a project task thread; mirrors the thread record for list badges. */
+  threadStatus: z.enum(['working', 'needs_you', 'done', 'failed']).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   /* Files */
@@ -1235,6 +1237,7 @@ export const tPresetSchema = tConversationSchema
   .omit({
     conversationId: true,
     chatProjectId: true,
+    threadStatus: true,
     createdAt: true,
     updatedAt: true,
     title: true,
@@ -1742,6 +1745,9 @@ export const compactAgentsBaseSchema = tConversationSchema.pick({
   agent_id: true,
   instructions: true,
   additional_instructions: true,
+  /** The thinking pill's mode; the backend keeps it only for agents on a `llama_cpp_budget`
+   *  endpoint (`selectRequestModelParameters` in packages/api). */
+  reasoning_effort: true,
 });
 
 export const compactAgentsSchema = compactAgentsBaseSchema

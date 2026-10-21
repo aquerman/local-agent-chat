@@ -23,8 +23,15 @@ export const ASK_USER_QUESTION_TOOL_NAME = 'ask_user_question';
  * model-generated and rendered verbatim (as text nodes — React escapes) in the
  * client question card, so bound them here rather than trusting the model.
  */
-const QUESTION_MAX = 2000;
-const DESCRIPTION_MAX = 4000;
+/**
+ * Every bound here also becomes a repetition in the tool-call grammar a local
+ * llama.cpp `llama-server` compiles from the schema, and it refuses the whole
+ * request ("failed to parse grammar") once one reaches 2000. Keep all of them
+ * at or below `LLAMA_CPP_GRAMMAR_SAFE_MAX`.
+ */
+export const LLAMA_CPP_GRAMMAR_SAFE_MAX = 1000;
+const QUESTION_MAX = LLAMA_CPP_GRAMMAR_SAFE_MAX;
+const DESCRIPTION_MAX = LLAMA_CPP_GRAMMAR_SAFE_MAX;
 const HEADER_MAX = 80;
 const OPTION_LABEL_MAX = 280;
 const OPTION_VALUE_MAX = 500;

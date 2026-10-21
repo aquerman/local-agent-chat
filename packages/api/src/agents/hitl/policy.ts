@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'crypto';
+import { logger } from '@librechat/data-schemas';
 import { openAIBaseSchema, googleBaseSchema, anthropicBaseSchema } from 'librechat-data-provider';
 import type { Agents, TToolApprovalPolicy } from 'librechat-data-provider';
 import type { ToolPolicyConfig } from '@librechat/agents';
@@ -44,6 +45,12 @@ export interface ToolApprovalPolicyLayers {
    * an administrator to opt the whole endpoint into prompts.
    */
   attachedCodeEnvironment?: boolean;
+  /**
+   * Exact tool names the user approved for the rest of this conversation ("always allow in
+   * this chat", stored on the conversation). Appended to `allow` of an enabled policy, so an
+   * `ask` or `deny` rule that matches still wins over them, as it does over any `allow`.
+   */
+  session?: readonly string[];
 }
 
 /**
@@ -70,13 +77,82 @@ export function resolveToolApprovalPolicy(
     layers.endpoint?.enabled !== true &&
     layers.endpoint?.enabled !== false
   ) {
-    return {
-      ...layers.endpoint,
-      enabled: true,
-      mode: 'bypass',
-    };
+    return withSessionApprovals(
+      {
+        ...layers.endpoint,
+        enabled: true,
+        mode: 'bypass',
+      },
+      layers.session,
+    );
   }
-  return layers.endpoint;
+  return withSessionApprovals(layers.endpoint, layers.session);
+}
+
+/** Session names are matched as globs downstream, so only literal tool names are kept. */
+function withSessionApprovals(
+  policy: TToolApprovalPolicy | undefined,
+  session: readonly string[] | undefined,
+): TToolApprovalPolicy | undefined {
+  if (!isHITLEnabled(policy) || session == null || session.length === 0) {
+    return policy;
+  }
+  const names = session.filter((name) => name.length > 0 && !name.includes('*'));
+  if (names.length === 0) {
+    return policy;
+  }
+  return { ...policy, allow: [...(policy.allow ?? []), ...names] };
+}
+
+/**
+ * Tool names from one resolved approval batch that the user approved for the rest of the
+ * conversation (`decision: 'approve'` with `scope: 'session'`). Names come from the pending
+ * action, never from the client, so a request can only remember tools that actually paused.
+ */
+export function collectSessionApprovedToolNames(
+  payload: Agents.ToolApprovalInterruptPayload,
+  resolutions: readonly Agents.ToolApprovalResolution[],
+): string[] {
+  const nameByToolCallId = new Map(
+    payload.action_requests.map((request) => [request.tool_call_id, request.name]),
+  );
+  const names = new Set<string>();
+  for (const resolution of resolutions) {
+    if (resolution.decision !== 'approve' || resolution.scope !== 'session') {
+      continue;
+    }
+    const name = nameByToolCallId.get(resolution.tool_call_id);
+    if (name != null && name.length > 0) {
+      names.add(name);
+    }
+  }
+  return [...names];
+}
+
+/**
+ * The conversation's remembered tool names, read only when the effective policy can prompt.
+ * A new conversation, a disabled policy or a failed read all yield none (the tools then ask).
+ */
+export async function loadSessionApprovedTools({
+  policy,
+  userId,
+  conversationId,
+  getConversationApprovedTools,
+}: {
+  policy: TToolApprovalPolicy | undefined;
+  userId?: string;
+  conversationId?: string | null;
+  getConversationApprovedTools: (user: string, conversationId: string) => Promise<string[]>;
+}): Promise<string[]> {
+  if (!isHITLEnabled(policy) || !userId || !conversationId) {
+    return [];
+  }
+  try {
+    return await getConversationApprovedTools(userId, conversationId);
+  } catch (error) {
+    logger.warn("[toolApproval] Could not read the chat's approved tools; they will ask", error);
+    return [];
+  }
 }
 
 /**
@@ -916,4 +992,44 @@ export function exemptAskUserQuestionFromApproval(
     return policy;
   }
   return { ...policy, allow: [...(policy.allow ?? []), toolName] };
+}
+
+/**
+ * Stores the tools a resume request approved "for this chat" before the resumed run is built,
+ * so its policy already skips them. Anything that is not a tool-approval resume is ignored, and
+ * a failed write only means those tools keep asking.
+ */
+export async function rememberSessionApprovals({
+  pendingAction,
+  body,
+  userId,
+  conversationId,
+  addConversationApprovedTools,
+}: {
+  pendingAction: { payload?: { type?: string } } | null | undefined;
+  body: { decisions?: unknown } | undefined;
+  userId: string;
+  conversationId: string;
+  addConversationApprovedTools: (
+    user: string,
+    conversationId: string,
+    toolNames: readonly string[],
+  ) => Promise<string[]>;
+}): Promise<void> {
+  const payload = pendingAction?.payload;
+  if (payload?.type !== 'tool_approval' || !Array.isArray(body?.decisions)) {
+    return;
+  }
+  const names = collectSessionApprovedToolNames(
+    payload as Agents.ToolApprovalInterruptPayload,
+    body.decisions as Agents.ToolApprovalResolution[],
+  );
+  if (names.length === 0) {
+    return;
+  }
+  try {
+    await addConversationApprovedTools(userId, conversationId, names);
+  } catch (error) {
+    logger.warn('[toolApproval] Could not remember "always allow in this chat"', error);
+  }
 }
