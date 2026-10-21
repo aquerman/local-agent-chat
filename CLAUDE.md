@@ -360,6 +360,45 @@ syncs conflict only here.
   `cd packages/documents && npx jest` (PDF tests need a browser: Edge on Windows, else set
   `DOCUMENTS_BROWSER_PATH`); typecheck with `npx tsc --noEmit` there.
 
+## Browser automation (roadmap 2.2)
+
+- `packages/browser` is a stdio MCP server wrapping Microsoft's Playwright MCP (`@playwright/mcp`,
+  pinned exact `0.0.83` as a dependency, so nothing is downloaded at start) in-process: the wrapper
+  is needed because Playwright MCP has no flag to drop core tools or cap output. Wired in
+  `bennychat.yaml` as `mcpServers.browser`, **not** `alwaysOn`: enable it per chat in the MCP picker
+  (plain endpoint chats; Benny has no picker, add the server to an agent in Agent Builder instead).
+- Browser: the installed, signed Microsoft Edge (`msedge` channel, visible window on Windows so the
+  user can watch and sign in to a site once), with a dedicated persistent profile in
+  `data/browser-profile` (git-ignored, `BROWSER_PROFILE_DIR`). The wrapper launches it itself
+  (`src/upstream.ts`, Playwright loaded from `@playwright/mcp`'s nested copy) so it can close it
+  cleanly; Playwright MCP's API leaves a browser it launched running. Closed window → relaunched on
+  the next call.
+- Sites: `BROWSER_ALLOWED_ORIGINS` in `.env` (`;`-separated: origin, `host`, `*.host`,
+  `http://host:*`). Unset = nothing. Enforced twice: Playwright's network filter on every request
+  (so a site's CDN hosts must be listed too) and a wrapper pre-check on `browser_navigate` / new
+  tabs with a clear message; a page that redirects off the list is cleared to `about:blank`.
+- Tools (12, ~2k tokens): navigate, navigate_back, snapshot, find, wait_for, tabs, click, type,
+  fill_form, select_option, press_key, handle_dialog. Hidden: evaluate, run_code_unsafe,
+  file_upload, drop, screenshot, console/network, resize, hover, drag, close; `filename`/`boxes`
+  arguments are stripped. Images off, codegen off, WebMCP off, service workers blocked.
+- Snapshots: `snapshot.mode: none`, so clicks/typing return only a short status and the model calls
+  `browser_snapshot` (supports `depth`, `target` ref) or `browser_find` (text search, small result).
+  Every result is cut at `BROWSER_MAX_CHARS` (12000 ≈ 3k tokens) with a note pointing to those two.
+  Risk: a big page still costs ~3k tokens per snapshot and refs beyond the cut need `find`.
+- Approvals (`endpoints.agents.toolApproval`): LibreChat strips the server-name prefix, so tools
+  are `navigate_mcp_browser` etc. Allowed without asking: snapshot, find, wait_for, navigate,
+  navigate_back, tabs (the site list is the per-site consent, like Claude in Chrome). Every acting
+  tool asks, with "Always allow in this chat". `deny` also lists evaluate/run_code/file_upload.
+- Tests: `cd packages/browser && npx jest` (the proxy suite drives a real Chromium found via
+  `BROWSER_EXECUTABLE_PATH` or `PLAYWRIGHT_BROWSERS_PATH`, skipped without one); `npx tsc --noEmit`.
+- Verified 2026-10-21 in the Linux rig (rig Chromium via `BROWSER_EXECUTABLE_PATH`, headless,
+  `BROWSER_NO_SANDBOX`, a local test site allowed): the backend connects the server (12 tools), a
+  plain chat with Browser picked ran navigate and snapshot without asking, `type` showed the approval
+  card, Approve typed into the page, and after "Always allow in this chat" the next `type` in that
+  chat ran without asking (scripted mock model). Qwen3-1.7B on its own did navigate → find → type
+  with a valid ref and reached the card (~7 min on CPU). Killing the backend left no browser behind.
+  Not verified: Edge on Windows, the visible window, sign-in persistence, Qwen3.5-9B.
+
 ## Agents, Benny and approvals (roadmap F3, 13)
 
 - Chats run through the Agents endpoint. `bennychat.yaml` sets `endpoints.agents` (no
