@@ -16,6 +16,10 @@ export type ThreadSummaryRequest = {
   brief: string;
   reply: string;
   maxTokens: number;
+  /** Set when the user talked to the thread directly: what they asked last. */
+  followUp?: string;
+  /** The hand-back the coordinator has now, which the new one replaces. */
+  previous?: string;
 };
 
 export type ThreadSummarizer = (request: ThreadSummaryRequest) => Promise<string>;
@@ -93,8 +97,16 @@ export function buildSummaryMessages({
   brief,
   reply,
   maxTokens,
+  followUp,
+  previous,
 }: ThreadSummaryRequest): Array<{ role: 'system' | 'user'; content: string }> {
   const words = Math.max(30, Math.floor(maxTokens * 0.7));
+  const earlier = previous
+    ? `Earlier hand-back note:\n${previous.slice(0, BRIEF_MAX_CHARS)}\n\n`
+    : '';
+  const asked = followUp
+    ? `The user then wrote in the thread:\n${followUp.slice(0, BRIEF_MAX_CHARS)}\n\n`
+    : '';
   return [
     {
       role: 'system',
@@ -106,7 +118,7 @@ export function buildSummaryMessages({
     {
       role: 'user',
       content:
-        `Task: ${title}\n\nBrief:\n${brief.slice(0, BRIEF_MAX_CHARS)}\n\n` +
+        `Task: ${title}\n\nBrief:\n${brief.slice(0, BRIEF_MAX_CHARS)}\n\n${earlier}${asked}` +
         `Final answer of the thread:\n${reply.slice(0, REPLY_MAX_CHARS)}`,
     },
   ];

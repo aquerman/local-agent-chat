@@ -52,7 +52,10 @@ jest.mock('../ExportAndShareMenu', () => () => null);
 jest.mock('../SubagentThreadLink', () => () => null);
 jest.mock('../Menus/BookmarkMenu', () => () => null);
 jest.mock('../AddMultiConvo', () => () => null);
-jest.mock('~/components/Projects/Panel', () => ({ ProjectPanelToggle: () => null }));
+jest.mock('~/components/Projects/Panel', () => ({
+  ProjectCrumb: () => null,
+  ProjectPanelToggle: () => null,
+}));
 
 describe('Header stacking', () => {
   const backgroundTasks = jest.requireMock('../BackgroundTasks').BackgroundTasksButton as jest.Mock;

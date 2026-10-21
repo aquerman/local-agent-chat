@@ -44,6 +44,23 @@ function getProjectThreadService() {
         ...(user.tenantId != null && { tenantId: user.tenantId }),
       };
     },
+    getProjectChat: async (user, conversationId) => {
+      const convo = await db.getConvo(user, conversationId);
+      if (!convo?.chatProjectId) {
+        return null;
+      }
+      const project = await db.getChatProject(user, convo.chatProjectId);
+      if (!project) {
+        return null;
+      }
+      return {
+        projectId: project._id.toString(),
+        coordinatorConversationId: project.coordinatorConversationId ?? null,
+        agentId: convo.agent_id ?? null,
+        title: convo.title ?? null,
+        ...(convo.tenantId != null && { tenantId: convo.tenantId }),
+      };
+    },
     getConfig: async () => (await getAppConfig())?.config?.projects?.threads,
     createSummarizer: (agentId) =>
       createThreadSummarizer({

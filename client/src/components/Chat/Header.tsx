@@ -9,7 +9,7 @@ import {
 } from 'librechat-data-provider';
 import { OpenSidebar, PresetsMenu, NewChat, HeaderMenu } from './Menus';
 import { TemporaryChat, TemporaryChatIndicator } from './TemporaryChat';
-import { ProjectPanelToggle } from '~/components/Projects/Panel';
+import { ProjectCrumb, ProjectPanelToggle } from '~/components/Projects/Panel';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
 import { BackgroundTasksButton } from './BackgroundTasks';
 import { useHasAccess, useMinimalLayout } from '~/hooks';
@@ -98,6 +98,9 @@ function Header({
           hiddenBehindNav,
         )}
       >
+        {parentConversationId == null && !isNewChat && (
+          <ProjectCrumb projectId={chatProjectId} conversationId={routeConversationId} />
+        )}
         {parentConversationId != null && (
           <SubagentThreadLink threadId={parentConversationId} labelClassName="hidden lg:inline" />
         )}

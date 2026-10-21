@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { logger } from '@librechat/data-schemas';
-import { projectThreadsConfigSchema } from 'librechat-data-provider';
+import { isEphemeralAgentId, projectThreadsConfigSchema } from 'librechat-data-provider';
 import type {
   IProjectThread,
   ProjectThreadStatus,
@@ -39,6 +39,9 @@ export type ProjectThreadServiceDeps = {
     | 'beginProjectThreadSettle'
     | 'requeueProjectThread'
     | 'finishProjectThread'
+    | 'getProjectThreadByConversation'
+    | 'adoptProjectThread'
+    | 'updateIdleProjectThreadSummary'
     | 'setDispatchedProjectThreadStatus'
     | 'setConversationThreadStatus'
   >;
@@ -52,6 +55,8 @@ export type ProjectThreadServiceDeps = {
   /** Generations running now across the server; a thread waits while live chat uses the GPU. */
   getRunningGenerationCount: () => Promise<number>;
   getPrincipal: (userId: string) => Promise<ProjectThreadPrincipal | null>;
+  /** The project a chat is filed in, for chats the user starts in a project themselves. */
+  getProjectChat?: (userId: string, conversationId: string) => Promise<ProjectChat | null>;
   getConfig: () => Promise<Partial<TProjectThreadsConfig> | undefined>;
   /** Summary step for the thread's agent; the start of the reply is used without it. */
   createSummarizer?: (agentId: string) => ThreadSummarizer;
@@ -71,6 +76,15 @@ export type StartProjectThreadInput = {
   agentId: string;
   title: string;
   brief: string;
+};
+
+/** A chat filed in a project, as the runner needs it to record the chat as a thread. */
+export type ProjectChat = {
+  projectId: string;
+  coordinatorConversationId?: string | null;
+  agentId?: string | null;
+  title?: string | null;
+  tenantId?: string;
 };
 
 export class ProjectThreadError extends Error {}
@@ -351,13 +365,18 @@ export function createProjectThreadService(deps: ProjectThreadServiceDeps): Proj
     return pumping;
   }
 
-  async function summarize(thread: IProjectThread, reply: string): Promise<string> {
+  async function summarize(
+    thread: IProjectThread,
+    reply: string,
+    followUp?: { text: string; previous?: string },
+  ): Promise<string> {
     const config = getThreadsConfig(await deps.getConfig());
     const request = {
       title: thread.title,
       brief: thread.brief,
       reply,
       maxTokens: config.summaryMaxTokens,
+      ...(followUp && { followUp: followUp.text, previous: followUp.previous }),
     };
     if (!deps.createSummarizer) {
       return fallbackSummary(request);
@@ -377,6 +396,7 @@ export function createProjectThreadService(deps: ProjectThreadServiceDeps): Proj
   }): Promise<void> {
     const thread = await methods.beginProjectThreadSettle(userId, conversationId);
     if (!thread) {
+      await handleUserTurn({ userId, conversationId, status });
       return;
     }
     const id = thread._id?.toString() ?? '';
@@ -411,6 +431,92 @@ export function createProjectThreadService(deps: ProjectThreadServiceDeps): Proj
       });
       await mirror(failed);
     }
+  }
+
+  /**
+   * A turn the user had with an idle thread directly, the way a Claude project thread is
+   * prompted: the coordinator's hand-back is rewritten so its next turn sees the new result.
+   */
+  async function handleUserTurn({ userId, conversationId, status }: SettledThreadEvent) {
+    if (status !== 'complete') {
+      return;
+    }
+    const config = getThreadsConfig(await deps.getConfig());
+    if (!config.enabled || !config.summarizeUserTurns) {
+      return;
+    }
+    const existing = await methods.getProjectThreadByConversation(userId, conversationId);
+    if (existing && existing.run !== 'idle') {
+      return;
+    }
+    const messages = await deps.getMessages(userId, conversationId);
+    const final = findFinalReply(messages);
+    const reply = final && final.error !== true ? extractMessageText(final) : '';
+    if (!reply || (existing && !isNewerThan(final?.createdAt, existing.finishedAt))) {
+      return;
+    }
+    const thread = existing ?? (await adoptUserChat(userId, conversationId, messages, config));
+    if (!thread) {
+      return;
+    }
+    const asked = findLastUserMessage(messages);
+    const askedText = asked ? extractMessageText(asked) : '';
+    const summary = await summarize(
+      thread,
+      reply,
+      existing ? { text: askedText, previous: existing.summary || undefined } : undefined,
+    );
+    const updated = await methods.updateIdleProjectThreadSummary(
+      thread._id?.toString() ?? '',
+      summary,
+    );
+    if (!updated) {
+      return;
+    }
+    /** The chat keeps the title the user sees; only its status chip follows. */
+    await methods
+      .setConversationThreadStatus(userId, conversationId, updated.status)
+      .catch((error) => logger.warn('[projects/threads] Could not mirror thread status', error));
+    await notify(updated);
+  }
+
+  /** A chat the user started in a project becomes a thread the coordinator can see and use. */
+  async function adoptUserChat(
+    userId: string,
+    conversationId: string,
+    messages: ThreadMessage[],
+    config: TProjectThreadsConfig,
+  ): Promise<IProjectThread | null> {
+    const chat = await deps.getProjectChat?.(userId, conversationId);
+    if (
+      !chat?.projectId ||
+      !chat.coordinatorConversationId ||
+      chat.coordinatorConversationId === conversationId
+    ) {
+      return null;
+    }
+    const agentId =
+      chat.agentId && !isEphemeralAgentId(chat.agentId) ? chat.agentId : config.agentId;
+    if (!agentId) {
+      return null;
+    }
+    const first = messages.find((message) => message.isCreatedByUser === true);
+    const brief = (first ? extractMessageText(first) : '').slice(0, config.briefMaxChars);
+    const chatTitle = chat.title?.trim() === 'New Chat' ? '' : chat.title?.trim();
+    const title = (chatTitle || brief.replace(/\s+/g, ' ').slice(0, 80)).slice(0, 200);
+    if (!title) {
+      return null;
+    }
+    return await methods.adoptProjectThread({
+      user: userId,
+      ...(chat.tenantId != null && { tenantId: chat.tenantId }),
+      projectId: chat.projectId,
+      conversationId,
+      coordinatorConversationId: chat.coordinatorConversationId,
+      agentId,
+      title,
+      brief,
+    });
   }
 
   /** Generation-settled listener: finish the thread, then let the next one run. */
@@ -526,6 +632,23 @@ function failureReason(
     return reply.slice(0, 500);
   }
   return 'The run ended without an answer.';
+}
+
+/** A reply written after the thread's last hand-back; older ones are summarized already. */
+function isNewerThan(createdAt?: Date | string, finishedAt?: Date | string | null): boolean {
+  if (!finishedAt || !createdAt) {
+    return true;
+  }
+  return new Date(createdAt).getTime() > new Date(finishedAt).getTime();
+}
+
+function findLastUserMessage(messages: ThreadMessage[]): ThreadMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].isCreatedByUser === true) {
+      return messages[i];
+    }
+  }
+  return undefined;
 }
 
 function findLast(messages: ThreadMessage[]): ThreadMessage | undefined {
