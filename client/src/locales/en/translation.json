@@ -3020,5 +3020,12 @@
   "com_insights_invalid_date_range": "Choose an end date after the start date, within {{days}} days.",
   "com_insights_sparkline_accessibility": "{{label}} over time",
   "com_nav_mobile_drawer_strip": "Show chat beside the sidebar on mobile",
-  "com_nav_mobile_drawer_strip_info": "The sidebar stops short of the edge so a strip of the conversation stays visible. Tapping it closes the sidebar."
+  "com_nav_mobile_drawer_strip_info": "The sidebar stops short of the edge so a strip of the conversation stays visible. Tapping it closes the sidebar.",
+  "com_ui_project_threads": "Threads",
+  "com_ui_project_threads_empty": "Ask the coordinator chat to start a task in the background. Its threads show up here.",
+  "com_ui_project_coordinator_open": "Coordinator",
+  "com_ui_thread_status_working": "Working",
+  "com_ui_thread_status_needs_you": "Needs you",
+  "com_ui_thread_status_done": "Done",
+  "com_ui_thread_status_failed": "Failed"
 }

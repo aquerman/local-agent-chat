@@ -51,6 +51,7 @@ jest.mock('@librechat/api', () => ({
     jest.requireActual('@librechat/api').getAgentErrorMetadata(...args),
   sendEvent: jest.fn(),
   isScheduleFireRequest: jest.fn(() => false),
+  isProjectThreadFireRequest: jest.fn(() => false),
   exemptFromConcurrencyLimiter: jest.fn(() => false),
   toPendingSteer: jest.fn((item) => item),
   isSteerPreemptSupported: jest.fn(() => true),

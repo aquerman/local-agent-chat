@@ -1052,6 +1052,10 @@ export function removeProjectKnowledge(
   return request.delete(endpoints.projectKnowledge(payload.projectId, payload.file_id));
 }
 
+export function getProjectThreads(projectId: string): Promise<t.TProjectThreadsResponse> {
+  return request.get(endpoints.projectThreads(projectId));
+}
+
 export function assignConversationToProject(
   payload: t.TAssignConversationToProjectRequest,
 ): Promise<t.TAssignConversationToProjectResponse> {

@@ -19,6 +19,7 @@ import { areConversationListItemFieldsEqual } from '~/components/Conversations/u
 import { useLocalize, useNavigateToConvo, useClockFormat } from '~/hooks';
 import { DateLabel } from '~/components/Conversations/Conversations';
 import ProjectChatOptions from './ProjectChatOptions';
+import ThreadStatusChip from './ThreadStatusChip';
 import { cn, groupConversations } from '~/utils';
 import { useActiveJobs } from '~/data-provider';
 
@@ -110,6 +111,7 @@ const ConversationRow = memo(
               {formattedDate}
             </span>
           </span>
+          <ThreadStatusChip status={conversation.threadStatus} className="shrink-0" />
           {isGenerating ? (
             <Spinner
               className="h-4 w-4 shrink-0 text-text-primary"

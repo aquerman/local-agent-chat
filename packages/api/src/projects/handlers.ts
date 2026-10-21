@@ -6,12 +6,15 @@ import {
 } from '@librechat/data-schemas';
 
 import type {
+  IProjectThread,
   ChatProjectMethods,
+  ProjectThreadMethods,
   ChatProjectSortBy,
   ChatProjectSortDirection,
   CreateChatProjectInput,
   UpdateChatProjectInput,
 } from '@librechat/data-schemas';
+import type { TProjectThread } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 
 import { normalizeLimit, queryString } from '~/utils';
@@ -43,7 +46,27 @@ type ProjectHandlerDependencies = Pick<
   | 'listChatProjectKnowledge'
   | 'addChatProjectKnowledge'
   | 'removeChatProjectKnowledge'
->;
+> &
+  Partial<Pick<ProjectThreadMethods, 'listProjectThreads'>>;
+
+const toDate = (value?: Date | null): string | null =>
+  value ? new Date(value).toISOString() : null;
+
+/** A thread as the project view shows it; the brief and queue fields stay on the server. */
+export function toProjectThreadResponse(thread: IProjectThread): TProjectThread {
+  return {
+    id: thread._id?.toString() ?? '',
+    projectId: thread.projectId,
+    conversationId: thread.conversationId,
+    title: thread.title,
+    status: thread.status,
+    summary: thread.summary || undefined,
+    error: thread.error || undefined,
+    createdAt: toDate(thread.createdAt) ?? '',
+    updatedAt: toDate(thread.updatedAt) ?? '',
+    finishedAt: toDate(thread.finishedAt),
+  };
+}
 
 const getUserId = (req: ProjectRequest): string => req.user?.id ?? req.user?._id?.toString() ?? '';
 
@@ -94,6 +117,7 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
   listKnowledge: (req: ProjectRequest, res: Response) => Promise<Response>;
   addKnowledge: (req: ProjectRequest, res: Response) => Promise<Response>;
   removeKnowledge: (req: ProjectRequest, res: Response) => Promise<Response>;
+  listThreads: (req: ProjectRequest, res: Response) => Promise<Response>;
 } {
   async function listProjects(req: ProjectRequest, res: Response): Promise<Response> {
     try {
@@ -290,7 +314,28 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
     }
   }
 
+  async function listThreads(req: ProjectRequest, res: Response): Promise<Response> {
+    const { projectId } = req.params;
+    if (!isValidObjectIdString(projectId)) {
+      return res.status(404).json({ error: PROJECT_NOT_FOUND });
+    }
+
+    try {
+      const userId = getUserId(req);
+      const project = await deps.getChatProject(userId, projectId);
+      if (!project) {
+        return res.status(404).json({ error: PROJECT_NOT_FOUND });
+      }
+      const threads = (await deps.listProjectThreads?.(userId, projectId)) ?? [];
+      return res.status(200).json({ threads: threads.map(toProjectThreadResponse) });
+    } catch (error) {
+      logger.error('[projects] Error listing project threads', error);
+      return res.status(500).json({ error: 'Error listing project threads' });
+    }
+  }
+
   return {
+    listThreads,
     listProjects,
     createProject,
     assignConversationToProject,

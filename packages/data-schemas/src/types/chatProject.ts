@@ -12,6 +12,8 @@ export interface IChatProject {
   conversationCount: number;
   lastConversationAt?: Date | null;
   lastConversationId?: string | null;
+  /** The project's coordinator chat, which can start and follow task threads. */
+  coordinatorConversationId?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
   tenantId?: string;

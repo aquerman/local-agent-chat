@@ -86,6 +86,12 @@ from a phone over Tailscale.
   per sub-question in the chat, then writes the report section by section into a PDF (or Word or
   Markdown, if you ask) with numbered citations and a source list. Benny can do a short version
   with the `deep-research` skill. Created together with Benny by `npm run seed-benny`.
+- **Project coordinator and threads.** The first chat in a project is its coordinator. Ask it for
+  something that takes research or several steps and it starts a background *thread*: a separate
+  chat in the project that works on the task after the reply, one at a time behind your live chat.
+  Threads show a status (Working, Needs you, Done, Failed) in the project page and the chat list;
+  when one finishes, it hands the coordinator a short summary, so you can just ask "what did it
+  find?". Open a thread to read it in full or to approve something it is waiting on.
 
 ## Running it (Windows)
 

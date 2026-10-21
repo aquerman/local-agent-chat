@@ -89,6 +89,7 @@ import {
   type ParentSubagentThreadRecord,
 } from './conversation';
 import { createChatProjectMethods, type ChatProjectMethods } from './chatProject';
+import { createProjectThreadMethods, type ProjectThreadMethods } from './projectThread';
 export {
   CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR,
   CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND,
@@ -105,6 +106,11 @@ export type {
   ListChatProjectsResult,
   UpdateChatProjectInput,
 } from './chatProject';
+export type {
+  ClaimedProjectThread,
+  CreateProjectThreadInput,
+  FinishProjectThreadInput,
+} from './projectThread';
 /* Tier 3 — Complex (heavier injection) */
 import {
   createTxMethods,
@@ -265,6 +271,7 @@ export type AllMethods = UserMethods &
   MessageMethods &
   ConversationMethods &
   ChatProjectMethods &
+  ProjectThreadMethods &
   TxMethods &
   TransactionMethods &
   SpendTokensMethods &
@@ -498,6 +505,7 @@ export function createMethods(
     ...messageMethods,
     ...conversationMethods,
     ...createChatProjectMethods(mongoose),
+    ...createProjectThreadMethods(mongoose),
     /* Tier 3 */
     ...txMethods,
     ...transactionMethods,
@@ -563,6 +571,7 @@ export type {
   ConversationMethods,
   AgentEventActorReconciliationStorageMetrics,
   ChatProjectMethods,
+  ProjectThreadMethods,
   TxMethods,
   TransactionMethods,
   SpendTokensMethods,

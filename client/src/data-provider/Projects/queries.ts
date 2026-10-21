@@ -4,6 +4,7 @@ import type {
   TChatProject,
   ProjectListParams,
   ProjectListResponse,
+  TProjectThreadsResponse,
   TChatProjectKnowledgeResponse,
 } from 'librechat-data-provider';
 import type {
@@ -63,6 +64,28 @@ export const useProjectKnowledgeQuery = (
     {
       enabled: Boolean(projectId),
       refetchOnWindowFocus: false,
+      ...config,
+    },
+  );
+};
+
+/** Polls while a thread is working or waiting, so status badges follow background runs. */
+export const THREADS_POLL_MS = 10_000;
+
+export const useProjectThreadsQuery = (
+  projectId?: string | null,
+  config?: UseQueryOptions<TProjectThreadsResponse>,
+): QueryObserverResult<TProjectThreadsResponse, unknown> => {
+  return useQuery<TProjectThreadsResponse>(
+    [QueryKeys.projectThreads, projectId],
+    () => dataService.getProjectThreads(projectId ?? ''),
+    {
+      enabled: Boolean(projectId),
+      refetchOnWindowFocus: true,
+      refetchInterval: (data) =>
+        data?.threads.some((thread) => thread.status === 'working' || thread.status === 'needs_you')
+          ? THREADS_POLL_MS
+          : false,
       ...config,
     },
   );

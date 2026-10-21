@@ -524,6 +524,42 @@ syncs conflict only here.
   the configured budget truncated as described. UI: instructions dialog, upload and phone width
   (removing a file is covered by the component test only).
 
+## Project threads and coordinator (roadmap P1b/P1c)
+
+- Like a Claude project with a coordinator and task threads. `projects.threads` in
+  `bennychat.yaml` (`configSchema`, default off). The first non-thread chat to run a turn in a
+  project becomes its coordinator (`ChatProject.coordinatorConversationId`, set-if-empty; handed
+  on when that chat is deleted). Only the coordinator gets the four tools `start_thread`,
+  `list_threads`, `read_summary`, `post_to_thread` (`packages/api/src/projects/threads/tools.ts`),
+  as in-process `graphTools` via a fork field `hostGraphTools` on the run agent
+  (`packages/api/src/agents/run.ts`), set in `initialize.js` by `resolveCoordinatorTools`. They
+  are on the `toolApproval.allow` list (they only touch chats inside the project).
+- A thread is a `ProjectThread` record (`packages/data-schemas/src/methods/projectThread.ts`) plus
+  an ordinary chat in the project (`chatProjectId` set, so it gets instructions and knowledge;
+  never the tools or the index). Status working / needs_you / done / failed lives on the record and
+  is mirrored to `conversation.threadStatus` for the list badges (`ThreadStatusChip`). Route:
+  `GET /api/projects/:id/threads`; the project page shows a Threads card and a Coordinator button.
+- Runner: `createProjectThreadService` (`packages/api/src/projects/threads/service.ts`), wired in
+  `api/server/services/Projects/threads.js` and started after the schedule engine. Runs go through
+  the durable agent trigger queue (`enqueueAgentTrigger`, `fire` for the first run with the
+  thread's own `newConversationId`, `continue` for `post_to_thread`), source type
+  `project_thread` (`isProjectThreadFireRequest`; `request.js` honors `newConversationId` and skips
+  auto-titles for it). One at a time (`concurrency`, default 1) and only when no other generation
+  is running, so a thread starts after the coordinator's reply and waits behind live chat.
+  `GenerationJobManager.onGenerationSettled` finishes a run; a 15 s sweep catches approval pauses
+  (`requires_action` -> needs_you), missed settles and lost runs (failed after 30 min).
+- Finish: a summary step (`summary.ts`) calls the agent's custom endpoint `/chat/completions`
+  directly with thinking off (`chat_template_kwargs.enable_thinking: false`), ≤`summaryMaxTokens`
+  (300), from the brief plus the thread's final reply; on failure it keeps the reply's start.
+  The coordinator's project block ends with its role line plus `<project_threads>` (finished
+  threads only, newest `indexLimit`, title/status/summary), so it changes only when a thread
+  finishes and the prefix cache holds. Notifications: `onStatusChange` in the wiring is the hook
+  point for the N15 Notifier.
+- Single backend per database (the runner is in-process, like schedules). Verified 2026-10-21 in
+  the rig with a scripted stand-in model and with Qwen3-1.7B on CPU: coordinator called
+  `start_thread`, the thread ran after the reply, finished with a summary, showed done, and the
+  coordinator's next turn had the summary in its system prompt.
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in
