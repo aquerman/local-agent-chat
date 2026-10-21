@@ -82,7 +82,12 @@ export function buildPanelRows(
       sortKey: thread.updatedAt,
     });
   }
-  return rows.sort((a, b) => (a.sortKey < b.sortKey ? 1 : a.sortKey > b.sortKey ? -1 : 0));
+  return rows.sort((a, b) => {
+    if (a.sortKey === b.sortKey) {
+      return 0;
+    }
+    return a.sortKey < b.sortKey ? 1 : -1;
+  });
 }
 
 const rowClass = (active: boolean) =>
@@ -309,9 +314,7 @@ function ProjectPanel({
                       <ThreadStatusChip status={row.status} className="shrink-0" />
                     </span>
                     {row.detail ? (
-                      <span className="line-clamp-2 text-xs text-text-secondary">
-                        {row.detail}
-                      </span>
+                      <span className="line-clamp-2 text-xs text-text-secondary">{row.detail}</span>
                     ) : null}
                   </button>
                 </li>
