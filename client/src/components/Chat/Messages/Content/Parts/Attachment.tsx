@@ -505,6 +505,29 @@ export default function Attachment({ attachment }: { attachment?: TAttachment })
   return <FileAttachment attachment={attachment} />;
 }
 
+/**
+ * Keeps one entry per stored file: a file a tool updates in place (the documents MCP server's
+ * `append_section` re-renders the same file) arrives once per call under the same `file_id`, and
+ * every entry downloads the latest bytes anyway. The latest entry takes the first one's place.
+ */
+export function latestFileVersions(attachments: TAttachment[]): TAttachment[] {
+  const result: TAttachment[] = [];
+  const indexById = new Map<string, number>();
+  for (const attachment of attachments) {
+    const fileId = 'file_id' in attachment ? attachment.file_id : undefined;
+    const index = fileId ? indexById.get(fileId) : undefined;
+    if (index !== undefined) {
+      result[index] = attachment;
+      continue;
+    }
+    if (fileId) {
+      indexById.set(fileId, result.length);
+    }
+    result.push(attachment);
+  }
+  return result;
+}
+
 export function AttachmentGroup({ attachments }: { attachments?: TAttachment[] }) {
   if (!attachments || attachments.length === 0) {
     return null;
@@ -520,7 +543,7 @@ export function AttachmentGroup({ attachments }: { attachments?: TAttachment[] }
   const panelRow: Array<{ attachment: TAttachment; type: ToolArtifactType | null }> = [];
   const mermaidArtifacts: TAttachment[] = [];
 
-  attachments.forEach((attachment) => {
+  latestFileVersions(attachments).forEach((attachment) => {
     if (attachment.type === Tools.web_search) {
       return;
     }

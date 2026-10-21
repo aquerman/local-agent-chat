@@ -385,7 +385,7 @@ syncs conflict only here.
   `execute_code`/`web_search`/`ocr` capabilities: no Code API, search keys or OCR here;
   `recursionLimit: 20`), top-level `summarization` (self-summarizes on the agent's own model past the
   32k default budget for model `local`) and a default model spec `benny` → `agent_id: agent_benny`.
-- Agents are DB records, so `npm run seed-benny -- [email] [--reset]` (`config/seed-benny.js`) creates
+- Agents are DB records, so `npm run seed-benny -- [email] [--reset | --reset=researcher]` (`config/seed-benny.js`) creates
   `agent_benny` (provider `Benner`, model `local`, websearch MCP + `ask_user_question`, artifacts off
   to save ~2.5k prompt tokens), owned by the given or oldest user and public-viewable. Idempotent;
   `--reset` restores the defaults. `alwaysOn` MCP servers do not attach to saved agents: Benny lists
@@ -401,6 +401,42 @@ syncs conflict only here.
   name on the conversation (`approvedTools`, `select: false`, data-schemas `toolApprovals.ts`) and
   `createRun` appends it to `allow` (`resolveToolApprovalPolicy` `session` layer). `ask`/`deny`
   patterns still win over it, so do not put write tools in `ask` if they should be rememberable.
+
+## Deep research (roadmap 16)
+
+- Claude's Research UX on the local stack: plan first, sources cited inline, report as a document.
+  The workflow is one skill, `skill/deep-research/SKILL.md`: plan 3-6 sub-questions (shown in the
+  reply, no approval wait) → per sub-question one `search`, 1-3 `fetch` calls with `maxChars: 6000`,
+  then a ≤150-word note in the chat with numbered sources → report via `create_document` (Summary,
+  default `pdf`; `docx`/`md` on request), one `append_section` per sub-question, then `## Sources`.
+  Notes stay in the chat, so the report step needs no re-fetch.
+- **Researcher agent** (`agent_researcher`, model spec `researcher`, seeded with Benny by
+  `npm run seed-benny`): its instructions are the skill body read at seed time (re-seed with
+  `--reset=researcher` after editing the skill), so the 9B model follows it from the first token
+  with no `skill` call (the rig's small model never called `skill` on its own). Tools: websearch +
+  documents only (4 tools, ~2.7k chars of system prompt). `recursion_limit: 100` (one tool round
+  is ~3 graph steps; a 6×3 run plus report needs ~30 rounds), hence `maxRecursionLimit: 100` in
+  `bennychat.yaml`; `model_parameters.maxContextTokens: 96000` so a long run is not summarized
+  away at the 32k default (needs llama-server at ~120k ctx).
+- **Benny** now has `skills_enabled: true` (scope all) in the seed, so the skill catalog and `$`
+  picks work there; this adds the `skill`/`read_file` and, while `interface.skills.create` is on,
+  `create_file`/`edit_file` tools (~1.6k tokens). With Benny's limit of 20 steps the skill's
+  "Short runs" rule applies: 3 sub-questions, 1 source each, one `create_document` call.
+- **No subagents.** The `subagents` capability (parallel sub-question workers in isolated contexts)
+  is not used: on one GPU the workers share the same slots, so parallelism buys little, the tool's
+  own description is ~350 tokens, and a 9B must write a self-contained brief per worker. A whole
+  run stays ~20-30k tokens with the 6000-char fetch cap, well inside 120k, so isolation is not needed.
+- `packages/documents` gained `format: 'md'` (`text/markdown`, title as `#` heading). The client
+  shows a file updated in place by several tool calls (same `file_id`, e.g. each `append_section`)
+  as one chip, its latest version (`latestFileVersions` in `Parts/Attachment.tsx`).
+- Verified 2026-10-21 in the rig with a scripted stand-in model (test-only, not committed) and the
+  real websearch server wrapped with an injected fetch that maps fake public hosts onto 4 local
+  HTML pages (the committed SSRF guard untouched; a direct loopback fetch was still refused):
+  plan, 3 notes with numbered sources, and a cited PDF attached to the chat in 13 tool rounds;
+  prompts grew from ~1.9k to ~5k tokens. Benny, loading the skill through the `skill` tool, did
+  the short run in 8 tool rounds within its 20-step limit (a "3 rounds left" notice arrives at round
+  7) and attached a `.md` report. The rig's Qwen3-1.7B made the plan and searched, but wrote notes
+  from snippets without fetching and never made the document. Not verified: Qwen3.5-9B, live websites.
 
 ## Connectors (Todoist, calendar, email)
 

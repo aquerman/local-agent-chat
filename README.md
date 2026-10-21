@@ -74,12 +74,18 @@ from a phone over Tailscale.
   model create `.docx`, `.pdf` and `.pptx` files from Markdown or a slide outline, in one clean
   house style, and add to them section by section for long documents. The file arrives in the chat
   as an attachment to download (Word and PowerPoint files also get a preview card). PDFs are
-  printed with the Microsoft Edge that Windows already has; nothing extra to install.
+  printed with the Microsoft Edge that Windows already has; nothing extra to install. Markdown
+  (`.md`) files work too.
 - **Project instructions and knowledge.** Like Claude Projects: open a project (Projects in the
   sidebar), set instructions ("always answer in British English", "I'm planning a house move") and
   add files. Every chat in the project follows the instructions and can read the files. Small
   knowledge is read in full (up to `projects.knowledgeInlineTokens`, 6000 tokens by default); past
   that, chats get as much as fits and are told which files were left out.
+- **Deep research.** Pick "Researcher" in the model selector, like Claude's Research mode: it shows
+  a plan of 3-6 sub-questions, searches and reads 1-3 web pages for each, writes a short cited note
+  per sub-question in the chat, then writes the report section by section into a PDF (or Word or
+  Markdown, if you ask) with numbered citations and a source list. Benny can do a short version
+  with the `deep-research` skill. Created together with Benny by `npm run seed-benny`.
 
 ## Running it (Windows)
 
@@ -94,7 +100,8 @@ npm run build
 ```
 
 Start BennyChat once, register your account, then run `npm run seed-benny` (safe to repeat) to
-create the default Benny agent.
+create the default Benny agent and the Researcher agent. After pulling a change to either, run
+`npm run seed-benny -- --reset` (or `--reset=researcher` to keep your own edits to Benny).
 
 Then start everything with `scripts\start-all.bat`. It opens one Windows Terminal window with a tab
 for llama-server and a tab for BennyChat, and skips whichever is already running.

@@ -16,12 +16,17 @@ export interface ServerOptions {
   launch?: LaunchBrowser;
 }
 
-const LABELS = { docx: 'Word document', pdf: 'PDF', pptx: 'PowerPoint deck' } as const;
+const LABELS = {
+  docx: 'Word document',
+  pdf: 'PDF',
+  pptx: 'PowerPoint deck',
+  md: 'Markdown file',
+} as const;
 
 const CREATE_DESCRIPTION =
-  'Create a Word (docx), PDF or PowerPoint (pptx) file and attach it to the chat for the user to download. ' +
+  'Create a Word (docx), PDF, PowerPoint (pptx) or Markdown (md) file and attach it to the chat for the user to download. ' +
   'You write only the content; fonts, headings and layout come from a built-in style. ' +
-  'docx/pdf: content is Markdown (headings, lists, tables, code blocks; no title heading, it is added from title). ' +
+  'docx/pdf/md: content is Markdown (headings, lists, tables, code blocks; no title heading, it is added from title). ' +
   'pptx: give slides (a title slide is added from title). ' +
   'For a long document, create it with the first section, then call append_section once per further section.';
 
@@ -130,12 +135,12 @@ export function createServer(options: ServerOptions): McpServer {
       title: 'Create document',
       description: CREATE_DESCRIPTION,
       inputSchema: {
-        format: z.enum(FORMATS).describe('docx (Word), pdf, or pptx (slides)'),
+        format: z.enum(FORMATS).describe('docx (Word), pdf, pptx (slides) or md (Markdown)'),
         title: z.string().min(1).describe('Document title; also names the file'),
         content: z
           .string()
           .optional()
-          .describe('docx/pdf: the body (or its first section) as Markdown'),
+          .describe('docx/pdf/md: the body (or its first section) as Markdown'),
         slides: slidesParam,
       },
     },
@@ -166,7 +171,7 @@ export function createServer(options: ServerOptions): McpServer {
         content: z
           .string()
           .optional()
-          .describe('docx/pdf: the next section as Markdown, starting with its ## heading'),
+          .describe('docx/pdf/md: the next section as Markdown, starting with its ## heading'),
         slides: slidesParam,
       },
     },
