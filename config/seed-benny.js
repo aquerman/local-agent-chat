@@ -9,7 +9,10 @@
  * The agent is owned by the given user (by email), or by the oldest account when none is given, and
  * shared read-only with every user so the default model spec works for all accounts.
  *
- * Usage: npm run seed-benny -- [email] [--reset]
+ * With `--brief` it also seeds the "Morning brief" agent and, with `--schedule`, its daily run
+ * (roadmap 3, `config/seed-brief.js`, which documents the other flags).
+ *
+ * Usage: npm run seed-benny -- [email] [--reset] [--brief [--schedule] [--time 07:00] [--tz Area/City]]
  */
 const path = require('path');
 require('module-alias')({ base: path.resolve(__dirname, '..', 'api') });
@@ -127,17 +130,43 @@ async function seedBenny({ email, reset }) {
   return 0;
 }
 
-if (require.main === module) {
-  const args = process.argv.slice(2);
+module.exports = { seedBenny, findOwner, grantAccess, bennyDefaults, BENNY_AGENT_ID };
+
+/** Value of `--name value` or `--name=value`, or undefined. */
+function readOption(args, name) {
+  const inline = args.find((arg) => arg.startsWith(`--${name}=`));
+  if (inline) {
+    return inline.slice(name.length + 3);
+  }
+  const index = args.indexOf(`--${name}`);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+async function main(args) {
+  const valueOptions = ['time', 'tz'];
+  const optionValues = new Set(valueOptions.map((name) => readOption(args, name)));
+  const email = args.find((arg) => !arg.startsWith('--') && !optionValues.has(arg));
   const reset = args.includes('--reset');
-  const email = args.find((arg) => !arg.startsWith('--'));
-  seedBenny({ email, reset })
+  const code = await seedBenny({ email, reset });
+  if (code !== 0 || !args.includes('--brief')) {
+    return code;
+  }
+  const { seedBrief } = require('./seed-brief');
+  return seedBrief({
+    email,
+    reset,
+    schedule: args.includes('--schedule'),
+    time: readOption(args, 'time'),
+    timezone: readOption(args, 'tz'),
+  });
+}
+
+if (require.main === module) {
+  main(process.argv.slice(2))
     .then((code) => process.exit(code))
     .catch((error) => {
-      console.red('Seeding Benny failed:');
+      console.red('Seeding failed:');
       console.error(error);
       process.exit(1);
     });
 }
-
-module.exports = { seedBenny, bennyDefaults, BENNY_AGENT_ID };

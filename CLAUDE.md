@@ -331,6 +331,25 @@ syncs conflict only here.
   (mock model), each a new agents chat with the reply and `lastRun: success`; Run now against the
   CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
   `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
+- Morning brief (roadmap 3): `npm run seed-benny -- [email] --brief [--schedule] [--time HH:MM]
+  [--tz Area/City]` (`config/seed-brief.js`) seeds `agent_morning_brief` (thinking Off, artifacts off)
+  with `list_events_mcp_calendar`, `find-tasks-by-date_mcp_todoist` and `search_mcp_websearch`, and
+  with `--schedule` one daily schedule (default 07:00, the machine's zone; re-running retimes it).
+  Only connectors the owner has connected are attached (calendar: a `mcp_calendar` PluginAuth row;
+  Todoist: an `mcp:todoist` OAuth token), because the schedule's MCP preflight
+  (`packages/api/src/schedules/mcp.ts`) disables a schedule whose agent has an unconnected server
+  (`mcp_configuration_missing` / `mcp_reauth_required`) instead of running without it. Missing
+  sources get no section in the format and are named on its last line ("Not connected: ..."). Re-run after
+  connecting; refreshes rewrite tools and instructions, `--reset` also name/description/model.
+  An expired Todoist grant still pauses the schedule (upstream behaviour, card names the server).
+  Instructions use `{{current_date}}` and follow `skill/morning-brief`'s format. Tests:
+  `npx jest --config config/jest.config.js seed-brief`.
+  Verified 2026-10-21 in the rig (CPU Qwen3-1.7B, fixture ICS, a stdio stand-in for Todoist's
+  `find-tasks-by-date`): seeding, idempotent re-seed, Run now filing a chat with the real events and
+  tasks; with nothing connected the run still succeeds. DuckDuckGo is unreachable from the rig, and
+  the 1.7B then invents headlines (and, with no sources at all, events) despite the instructions:
+  check Qwen3.5-9B.
+
 ## Documents (Word, PDF, PowerPoint)
 
 - `packages/documents` is a stdio MCP server (roadmap 5a) with two tools: `create_document(format, title,
