@@ -114,6 +114,9 @@ endpoints:
         # Roadmap 5a: documents only renders a file into this chat (like Claude Desktop's file
         # creation), so create_document / append_section run without asking.
         - '*_mcp_documents'
+        # Roadmap 8, folder access: the filesystem server's one read-only tool the patterns above
+        # miss. Its write_file, edit_file, create_directory and move_file match nothing, so they ask.
+        - 'directory_tree_mcp_filesystem'
       reason: 'Benny wants to run {tool}. It can change data outside this chat.'
     # Paused runs (approval or Ask User) wait up to a day in MongoDB, then expire.
     checkpointer:
@@ -228,6 +231,27 @@ mcpServers:
     env:
       DOCUMENTS_PAGE_SIZE: 'A4'
 
+  # Roadmap 8, folder access: the reference filesystem MCP server
+  # (@modelcontextprotocol/server-filesystem, pinned in packages/folders, so nothing is downloaded at
+  # start) on the folders listed in BENNY_FOLDERS in .env, separated by ';' on Windows, for example
+  # BENNY_FOLDERS=%USERPROFILE%\Documents\Assistant;%USERPROFILE%\Notes. Unset, it serves
+  # <home>\Documents\Assistant (created if missing). Paths outside those folders are refused.
+  # Benny carries 9 of its 14 tools (config/seed-benny.js). Not alwaysOn: other chats pick "Folders"
+  # from the MCP selector, so its schemas stay out of chats that do not use them. Writes ask first
+  # (endpoints.agents.toolApproval above: reads match its allow list, the four write tools nothing).
+  filesystem:
+    type: stdio
+    title: 'Folders'
+    description: 'Read and search your folders; edits ask first'
+    command: node
+    args: ['packages/folders/src/index.mjs']
+    env:
+      BENNY_FOLDERS: '${BENNY_FOLDERS}'
+    serverInstructions: >-
+      Folder tools only reach the user's allowed folders (list_allowed_directories shows them).
+      Find files with search_files or list_directory, not directory_tree on big folders. Read long
+      files in parts with read_text_file head or tail. Writes ask the user for approval.
+
 # Artifacts offline (roadmap 5c): nothing to switch on in this file. Artifacts are enabled per chat
 # from the Tools menu. For previews without the internet, set in .env:
 #   SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080
@@ -239,6 +263,7 @@ mcpServers:
 # starts alongside the reply (upstream has no "after the reply" mode). llama-server's default
 # --parallel auto gives 4 slots, so it runs beside the reply instead of in front of it; the cost
 # is its prompt (~700 tokens) prefilled next to the reply's. Keep the window and limits small.
+
 memory:
   personalize: true # per-user "Use memory" switch in Customize > Memories
   tokenLimit: 1500 # total across all keys; ~1k-token slice of the turn budget
@@ -336,4 +361,3 @@ modelSpecs:
       preset:
         endpoint: 'agents'
         agent_id: 'agent_benny'
-

@@ -23,10 +23,28 @@ const connect = require('./connect');
 
 const BENNY_AGENT_ID = 'agent_benny';
 
+/**
+ * Roadmap 8: the filesystem server's tools Benny carries (~1.4k tokens of schemas, of its 14). Left
+ * out: read_file (alias of read_text_file), read_media_file (no vision model), read_multiple_files,
+ * list_directory_with_sizes and directory_tree (large outputs). Writes ask via toolApproval.
+ */
+const folderTools = [
+  'list_allowed_directories',
+  'list_directory',
+  'search_files',
+  'read_text_file',
+  'get_file_info',
+  'write_file',
+  'edit_file',
+  'create_directory',
+  'move_file',
+];
+
 /** Fields this script owns. Keep the instructions short: every token is prefilled on each turn. */
 const bennyDefaults = {
   name: 'Benny',
-  description: 'Local assistant: web search, documents, asks when unsure, approval before writes.',
+  description:
+    'Local assistant: web search, documents, your folders, asks when unsure, approval before writes.',
   instructions: [
     'You are Benny, a helpful assistant running on a local model.',
     'Answer directly and concisely. Use web search for anything recent or uncertain, and cite the pages you used.',
@@ -40,8 +58,9 @@ const bennyDefaults = {
     `${Constants.mcp_all}${Constants.mcp_delimiter}websearch`,
     `${Constants.mcp_all}${Constants.mcp_delimiter}documents`,
     'ask_user_question',
+    ...folderTools.map((tool) => `${tool}${Constants.mcp_delimiter}filesystem`),
   ],
-  mcpServerNames: ['websearch', 'documents'],
+  mcpServerNames: ['websearch', 'documents', 'filesystem'],
   /** Off: the artifacts prompt alone is ~2.5k tokens. Switch it on in the agent builder. */
   artifacts: '',
 };

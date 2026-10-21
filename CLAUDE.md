@@ -405,6 +405,38 @@ syncs conflict only here.
 - Small models invent dates: the calendar tools default to today and their descriptions say to leave
   `start` out; the result always begins with "Now: <date>".
 
+## Folder access
+
+- Roadmap 8. `mcpServers.filesystem` in `bennychat.yaml` runs the reference
+  `@modelcontextprotocol/server-filesystem` through `packages/folders` (`node
+  packages/folders/src/index.mjs`), which pins it as a dependency (no `npx` download per launch) and
+  passes it the folders from `BENNY_FOLDERS` in `.env`: `;`-separated on Windows, `%VAR%`/`~`
+  expanded, e.g. `%USERPROFILE%\Documents\Assistant;%USERPROFILE%\Documents\Notes`. Unset, it
+  uses `<home>\Documents\Assistant` and creates it. LibreChat's MCP client has no Roots support, so
+  the command line is the whole allow-list; paths outside it are refused by the server.
+- Pinned at `2026.8.31` (deprecated date tag, but it shares LibreChat's `@modelcontextprotocol/sdk`
+  1.30): `1.0.0`/`2.0.0` need SDK >= 1.31 and would bump LibreChat's own SDK in the lock. Move up
+  after an upstream sync brings the SDK forward. This version's `edit_file` saves CRLF files as LF.
+- Approval rides on roadmap 13's `toolApproval` (`mode: default`): reads match its `read*`/`list*`/
+  `search*`/`get*_mcp_*` allow patterns, `directory_tree_mcp_filesystem` is added explicitly, and
+  `write_file`, `edit_file`, `create_directory`, `move_file` match nothing, so they ask (Claude
+  Desktop's Filesystem extension: reads free, writes ask). Do not put them in `ask`, or "Always
+  allow in this chat" stops working for them.
+- Benny (`config/seed-benny.js`) carries 9 of the 14 tools (~5.4k chars of schemas, ~1.4k tokens):
+  no `read_file` alias, `read_media_file`, `read_multiple_files`, `list_directory_with_sizes` or
+  `directory_tree`. Like Claude Desktop, where an enabled extension is in every chat. An existing
+  Benny needs `npm run seed-benny -- --reset`. The server is not `alwaysOn`: non-agent chats pick
+  "Folders" (all 14 tools, ~8k chars) from the MCP selector.
+- Output size: the server has no content grep (`search_files` matches names by glob).
+  `serverInstructions` steers the model to `search_files`/`list_directory` and `read_text_file`
+  `head`/`tail`; for a hard cap set `maxToolResultChars` on the endpoint.
+- Tests: `cd packages/folders && npm test` (node:test, folder parsing).
+- Verified 2026-10-20 in the Linux rig (Qwen3-1.7B, CPU): the server connected at startup with 14
+  tools; in a chat with Folders picked, the model listed and read a file in the allowed temp folder,
+  a read outside it came back "Access denied - path outside allowed directories", and `write_file`
+  showed the Approve/Reject card and wrote the file only after Approve. Re-run on the agents build
+  with a seeded Benny: read and approved write both worked through Benny's folder tools.
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

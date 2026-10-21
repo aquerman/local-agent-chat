@@ -1,0 +1,18 @@
+{
+  "name": "@librechat/folders",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Launches the reference filesystem MCP server on the folders listed in BENNY_FOLDERS",
+  "type": "module",
+  "main": "src/index.mjs",
+  "bin": {
+    "librechat-folders": "src/index.mjs"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.mjs",
+    "start": "node src/index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "2026.8.31"
+  }
+}
