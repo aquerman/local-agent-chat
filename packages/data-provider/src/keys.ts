@@ -55,6 +55,7 @@ export enum QueryKeys {
   projects = 'projects',
   project = 'project',
   projectConversations = 'projectConversations',
+  projectKnowledge = 'projectKnowledge',
   categories = 'categories',
   randomPrompts = 'randomPrompts',
   agentCategories = 'agentCategories',

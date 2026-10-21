@@ -89,7 +89,13 @@ import {
   type ParentSubagentThreadRecord,
 } from './conversation';
 import { createChatProjectMethods, type ChatProjectMethods } from './chatProject';
+export {
+  CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR,
+  CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND,
+} from './chatProject';
 export type {
+  ChatProjectKnowledgeFile,
+  ChatProjectKnowledgeText,
   AssignConversationToProjectResult,
   ChatProjectSortBy,
   ChatProjectSortDirection,
