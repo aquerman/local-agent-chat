@@ -2,10 +2,16 @@ import { logger } from '@librechat/data-schemas';
 import { Tools, EToolResources, projectsConfigSchema } from 'librechat-data-provider';
 import type {
   IChatProject,
+  IProjectThread,
   ChatProjectMethods,
+  ProjectThreadMethods,
   ChatProjectKnowledgeFile,
 } from '@librechat/data-schemas';
-import type { TProjectsConfig, AgentToolResources } from 'librechat-data-provider';
+import type {
+  TProjectsConfig,
+  AgentToolResources,
+  TProjectThreadsConfig,
+} from 'librechat-data-provider';
 
 /** Rough characters per token for sizing knowledge without tokenizing it on every turn. */
 export const KNOWLEDGE_CHARS_PER_TOKEN = 4;
@@ -13,7 +19,17 @@ export const KNOWLEDGE_CHARS_PER_TOKEN = 4;
 export type ProjectContextDependencies = Pick<
   ChatProjectMethods,
   'getChatProject' | 'listChatProjectKnowledge' | 'getChatProjectKnowledgeText'
->;
+> &
+  Partial<
+    Pick<ChatProjectMethods, 'claimChatProjectCoordinator'> &
+      Pick<ProjectThreadMethods, 'getProjectThreadByConversation' | 'listFinishedProjectThreads'>
+  > & {
+    /** Whether a chat still exists, so a deleted coordinator chat can be replaced. */
+    conversationExists?: (userId: string, conversationId: string) => Promise<boolean>;
+  };
+
+/** What a chat is to its project: the coordinator, a task thread, or any other chat. */
+export type ProjectChatRole = 'chat' | 'coordinator' | 'thread';
 
 export type ProjectContextOptions = {
   userId: string;
@@ -22,6 +38,10 @@ export type ProjectContextOptions = {
   inlineTokenBudget: number;
   /** Whether the chat can search files with `file_search`: capability, role grant and RAG API. */
   retrievalAvailable: boolean;
+  /** The chat this turn runs in; needed to tell the coordinator and threads apart. */
+  conversationId?: string | null;
+  /** Coordinator and threads (roadmap P1b/P1c); off when absent. */
+  threads?: Pick<TProjectThreadsConfig, 'enabled' | 'indexLimit'>;
 };
 
 /** What a project adds to one chat turn. */
@@ -31,6 +51,16 @@ export type ProjectRunContext = {
   instructions: string;
   /** Knowledge files the chat searches with `file_search` instead of reading them in full. */
   searchFileIds: string[];
+  role: ProjectChatRole;
+};
+
+/** One finished thread in the coordinator's summary index. */
+export type ThreadIndexEntry = {
+  id: string;
+  title: string;
+  status: string;
+  summary?: string;
+  error?: string;
 };
 
 type InlineDocument = {
@@ -101,16 +131,19 @@ export function buildProjectSystemBlock({
   documents,
   searchFiles,
   omittedFiles,
+  coordinator,
 }: {
   name: string;
   instructions?: string;
   documents: InlineDocument[];
   searchFiles: string[];
   omittedFiles: string[];
+  /** Present for the project's coordinator chat: its finished threads, newest first. */
+  coordinator?: { threads: ThreadIndexEntry[] };
 }): string {
   const trimmedInstructions = instructions?.trim() ?? '';
   const hasKnowledge = documents.length + searchFiles.length + omittedFiles.length > 0;
-  if (!trimmedInstructions && !hasKnowledge) {
+  if (!trimmedInstructions && !hasKnowledge && !coordinator) {
     return '';
   }
 
@@ -142,7 +175,83 @@ export function buildProjectSystemBlock({
       `These project files were left out for length: ${omittedFiles.map(attribute).join(', ')}.`,
     );
   }
+  if (coordinator) {
+    parts.push(buildCoordinatorBlock(coordinator.threads));
+  }
   return parts.join('\n\n');
+}
+
+/**
+ * The coordinator's part of the project block: its role and the summary index of finished
+ * threads. Running threads are left out, so the block changes only when a thread finishes and
+ * llama-server keeps the cached prefix between turns.
+ */
+export function buildCoordinatorBlock(threads: ThreadIndexEntry[]): string {
+  const role =
+    "You are this project's coordinator. When the user asks for work that takes research or " +
+    'several steps, start a background task thread with start_thread and a self-contained ' +
+    'brief, tell the user it started, and keep talking. Finished threads appear below; use ' +
+    'list_threads for running ones, read_summary for one thread, post_to_thread to follow up.';
+  if (threads.length === 0) {
+    return role;
+  }
+  const body = threads
+    .map((thread) => {
+      const text = (thread.summary || thread.error || '').trim();
+      return `<thread id="${attribute(thread.id)}" title="${attribute(thread.title)}" status="${attribute(thread.status)}">\n${text}\n</thread>`;
+    })
+    .join('\n');
+  return `${role}\n<project_threads>\n${body}\n</project_threads>`;
+}
+
+const toIndexEntry = (thread: IProjectThread): ThreadIndexEntry => ({
+  id: thread._id?.toString() ?? '',
+  title: thread.title,
+  status: thread.status,
+  summary: thread.summary,
+  error: thread.error,
+});
+
+/**
+ * Decides whether this chat is the project's coordinator, one of its threads, or neither. The
+ * first other chat to run a turn in a project becomes its coordinator; when that chat is
+ * deleted, the next one takes over.
+ */
+export async function resolveProjectChatRole(
+  {
+    userId,
+    projectId,
+    conversationId,
+    project,
+  }: {
+    userId: string;
+    projectId: string;
+    conversationId?: string | null;
+    project: IChatProject;
+  },
+  deps: ProjectContextDependencies,
+): Promise<ProjectChatRole> {
+  if (!conversationId || conversationId === 'new' || !deps.claimChatProjectCoordinator) {
+    return 'chat';
+  }
+  const thread = await deps.getProjectThreadByConversation?.(userId, conversationId);
+  if (thread) {
+    return 'thread';
+  }
+  const current = project.coordinatorConversationId;
+  if (current === conversationId) {
+    return 'coordinator';
+  }
+  if (current && (await deps.conversationExists?.(userId, current)) !== false) {
+    return 'chat';
+  }
+  const claimed = await deps.claimChatProjectCoordinator(
+    userId,
+    projectId,
+    conversationId,
+    current ?? undefined,
+  );
+  return claimed === conversationId ? 'coordinator' : 'chat';
 }
 
 /**
@@ -172,19 +281,38 @@ export async function resolveProjectRunContext(
     options.inlineTokenBudget,
     options.retrievalAvailable,
   );
-  const documents = await readInlineDocuments(userId, plan, deps);
+  const resolvedProjectId = projectIdOf(project, projectId);
+  const role =
+    options.threads?.enabled === true
+      ? await resolveProjectChatRole(
+          { userId, projectId: resolvedProjectId, conversationId: options.conversationId, project },
+          deps,
+        )
+      : 'chat';
+  const [documents, finished] = await Promise.all([
+    readInlineDocuments(userId, plan, deps),
+    role === 'coordinator'
+      ? (deps.listFinishedProjectThreads?.(
+          userId,
+          resolvedProjectId,
+          options.threads?.indexLimit ?? 0,
+        ) ?? Promise.resolve([]))
+      : Promise.resolve([]),
+  ]);
   const instructions = buildProjectSystemBlock({
     name: project.name,
     instructions: project.instructions,
     documents,
     searchFiles: plan.search.map((file) => file.filename),
     omittedFiles: plan.omitted.map((file) => file.filename),
+    ...(role === 'coordinator' && { coordinator: { threads: finished.map(toIndexEntry) } }),
   });
 
   return {
-    projectId: projectIdOf(project, projectId),
+    projectId: resolvedProjectId,
     instructions,
     searchFileIds: plan.search.map((file) => file.file_id),
+    role,
   };
 }
 
@@ -262,6 +390,14 @@ export function resolveTurnProjectId({
     : null;
 }
 
+/** `projects.threads` from the app config, with defaults (off). */
+export function getThreadsSettings(
+  projects?: Partial<TProjectsConfig> | null,
+): TProjectThreadsConfig {
+  const parsed = projectsConfigSchema.safeParse(projects ?? {});
+  return parsed.success ? parsed.data.threads : projectsConfigSchema.parse({}).threads;
+}
+
 /** `projects.knowledgeInlineTokens` from the app config, or its default. */
 export function getKnowledgeInlineTokens(projects?: Partial<TProjectsConfig> | null): number {
   const parsed = projectsConfigSchema.safeParse(projects ?? {});
@@ -281,8 +417,10 @@ export async function loadProjectRunContext(
     requestedProjectId,
     projectsConfig,
     retrievalAvailable,
+    conversationId,
   }: {
     userId: string;
+    conversationId?: string | null;
     conversation?: { chatProjectId?: string | null } | null;
     requestedProjectId?: string | null;
     projectsConfig?: Partial<TProjectsConfig> | null;
@@ -301,6 +439,8 @@ export async function loadProjectRunContext(
         projectId,
         inlineTokenBudget: getKnowledgeInlineTokens(projectsConfig),
         retrievalAvailable,
+        conversationId,
+        threads: getThreadsSettings(projectsConfig),
       },
       deps,
     );

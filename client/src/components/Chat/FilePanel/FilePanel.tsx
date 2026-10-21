@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { lazy, Suspense, useRef, useState, useEffect, useCallback } from 'react';
 import { useRecoilValue } from 'recoil';
 import { Button } from '@librechat/client';
 import { Download, FileText, X } from 'lucide-react';
@@ -6,8 +6,12 @@ import type { FilePanelKind, FilePanelFile } from './kind';
 import FilePreviewDialog from '~/components/Chat/Messages/Content/FilePreviewDialog';
 import { getDownloadFilename, logger, triggerDownload } from '~/utils';
 import { useFileDownload, useFilePreviewBlob } from '~/data-provider';
+import { isOfficePanelKind } from './kind';
 import { useLocalize } from '~/hooks';
 import store from '~/store';
+
+/** The Office renderers weigh about a megabyte, so they load only when a DOCX or PPTX is opened. */
+const OfficePreview = lazy(() => import('./OfficePreview'));
 
 type LoadState = 'loading' | 'ready' | 'error';
 
@@ -27,13 +31,21 @@ export default function FilePanel({ file, kind, onClose }: FilePanelProps) {
   });
 
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [officeBlob, setOfficeBlob] = useState<Blob | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [textOpen, setTextOpen] = useState(false);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  /** Focus lands on Close when the panel opens, so Escape and Enter work straight away. */
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     let url: string | undefined;
     setObjectUrl(null);
+    setOfficeBlob(null);
     setLoadState('loading');
 
     const load = async () => {
@@ -43,6 +55,11 @@ export default function FilePanel({ file, kind, onClose }: FilePanelProps) {
           throw new Error('Preview download unavailable');
         }
         if (cancelled) {
+          return;
+        }
+        if (isOfficePanelKind(kind)) {
+          setOfficeBlob(blob);
+          setLoadState('ready');
           return;
         }
         /** The download endpoint may answer with a generic type; the browser only renders a PDF in a frame when told it is one. */
@@ -127,9 +144,9 @@ export default function FilePanel({ file, kind, onClose }: FilePanelProps) {
             size="icon"
             variant="ghost"
             className="h-9 w-9"
+            ref={closeRef}
             onClick={onClose}
             aria-label={localize('com_ui_close')}
-            autoFocus
           >
             <X size={16} aria-hidden="true" />
           </Button>
@@ -156,6 +173,17 @@ export default function FilePanel({ file, kind, onClose }: FilePanelProps) {
             alt={fileName}
             className="max-h-full max-w-full object-contain p-4"
           />
+        )}
+        {officeBlob && isOfficePanelKind(kind) && (
+          <Suspense
+            fallback={
+              <span className="shimmer text-sm text-text-secondary" role="status">
+                {localize('com_ui_loading')}
+              </span>
+            }
+          >
+            <OfficePreview blob={officeBlob} kind={kind} title={previewLabel} />
+          </Suspense>
         )}
       </div>
 

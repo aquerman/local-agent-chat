@@ -23,8 +23,10 @@ from a phone over Tailscale.
   selector next to Send, header actions in one "…" menu, reply actions on hover, and larger text on
   desktop.
 - **Phone menu.** On a phone the drawer keeps LibreChat's structure with its text one size larger.
-- **Document side panel.** Clicking a PDF or image you attached opens the original file in the
-  right-hand panel. For files the model read as text, a button shows the extracted text.
+- **Document side panel.** Clicking a PDF, image, Word (`.docx`) or PowerPoint (`.pptx`) file, attached
+  by you or made by the model, opens it in the right-hand panel. Word and PowerPoint files are drawn
+  in the browser, offline, with nothing to install; the panel keeps a download button. For files the
+  model read as text, a button shows the extracted text.
 - **PDFs as text.** llama-server cannot take PDF bytes, so PDFs are parsed on upload and their text
   goes into the prompt instead.
 - **Thinking mode.** An Off/Low/Medium/High pill in the input bar sets llama-server's thinking budget
@@ -54,10 +56,10 @@ from a phone over Tailscale.
   document house style), in Claude's `SKILL.md` format. Turn on "Skills" in the tools menu and the
   model sees only their names and one-line descriptions, loading a skill's full instructions when it
   needs one; or type `$` to pick one yourself. Add your own from the Skills panel.
-- **Offline artifacts.** HTML, SVG and Markdown previews, Mermaid diagrams and the code view work
-  without the internet: BennyChat serves the preview bundler, Tailwind and the code editor itself.
-  Set `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env` to switch it on. React
-  previews still load their bundler from codesandbox.io.
+- **Offline artifacts.** HTML, SVG, Markdown and React previews, Mermaid diagrams and the code view
+  work without the internet: BennyChat serves the preview bundler, Tailwind, the code editor and the
+  libraries React artifacts use (React, lucide icons, recharts, three.js, shadcn/ui components) itself.
+  Set `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env` to switch it on.
 - **Memory.** After each message, the local model notes lasting facts you mention: who you are, your
   preferences, your current projects and any standing instructions. It keeps them in a short memory
   (1.5k tokens) that every new chat sees. You can view, edit or delete entries, or switch memory off,
@@ -77,13 +79,25 @@ from a phone over Tailscale.
 - **Word, PDF and PowerPoint files.** Another built-in MCP server (`packages/documents`) lets the
   model create `.docx`, `.pdf` and `.pptx` files from Markdown or a slide outline, in one clean
   house style, and add to them section by section for long documents. The file arrives in the chat
-  as an attachment to download (Word and PowerPoint files also get a preview card). PDFs are
-  printed with the Microsoft Edge that Windows already has; nothing extra to install.
+  as an attachment to download; click it to preview Word and PowerPoint files in the side panel. PDFs are
+  printed with the Microsoft Edge that Windows already has; nothing extra to install. Markdown
+  (`.md`) files work too.
 - **Project instructions and knowledge.** Like Claude Projects: open a project (Projects in the
   sidebar), set instructions ("always answer in British English", "I'm planning a house move") and
   add files. Every chat in the project follows the instructions and can read the files. Small
   knowledge is read in full (up to `projects.knowledgeInlineTokens`, 6000 tokens by default); past
   that, chats get as much as fits and are told which files were left out.
+- **Deep research.** Pick "Researcher" in the model selector, like Claude's Research mode: it shows
+  a plan of 3-6 sub-questions, searches and reads 1-3 web pages for each, writes a short cited note
+  per sub-question in the chat, then writes the report section by section into a PDF (or Word or
+  Markdown, if you ask) with numbered citations and a source list. Benny can do a short version
+  with the `deep-research` skill. Created together with Benny by `npm run seed-benny`.
+- **Project coordinator and threads.** The first chat in a project is its coordinator. Ask it for
+  something that takes research or several steps and it starts a background *thread*: a separate
+  chat in the project that works on the task after the reply, one at a time behind your live chat.
+  Threads show a status (Working, Needs you, Done, Failed) in the project page and the chat list;
+  when one finishes, it hands the coordinator a short summary, so you can just ask "what did it
+  find?". Open a thread to read it in full or to approve something it is waiting on.
 
 ## Running it (Windows)
 
@@ -98,7 +112,8 @@ npm run build
 ```
 
 Start BennyChat once, register your account, then run `npm run seed-benny` (safe to repeat) to
-create the default Benny agent.
+create the default Benny agent and the Researcher agent. After pulling a change to either, run
+`npm run seed-benny -- --reset` (or `--reset=researcher` to keep your own edits to Benny).
 
 Then start everything with `scripts\start-all.bat`. It opens one Windows Terminal window with a tab
 for llama-server and a tab for BennyChat, and skips whichever is already running.
@@ -220,6 +235,32 @@ menu with **Run now**.
 
 Routines share the GPU with your chats: while one runs, a chat waits for it (and the other way
 round) unless local-llm starts llama-server with a second slot (`--parallel 2`).
+
+### Morning brief
+
+A ready-made routine: every morning a chat with today's events, the Todoist tasks due today or
+overdue, three headlines and your top three priorities, in under 250 words.
+
+1. Connect what you want in it (MCP panel, see `docs/connectors.md`): **Calendar** (paste your
+   calendar's secret iCal address) and **Todoist** (Connect, approve in the browser). Both are
+   optional; headlines need nothing.
+2. With BennyChat stopped or running, from the repo folder:
+
+   ```powershell
+   npm run seed-benny -- --brief --schedule --time 07:00 --tz Europe/Amsterdam
+   ```
+
+   `--time` defaults to 07:00 and `--tz` to the PC's own time zone, so `--brief --schedule` is
+   enough for most people. It creates the **Morning brief** agent and one daily scheduled chat, and
+   prints which sources it found. Add your email as the first argument if more than one account
+   exists.
+3. Customize → Scheduled chats → Morning brief → "…" → **Run now** to try it.
+
+A source you have not connected is left out of the brief and named on its last line ("Not
+connected: Calendar, Todoist") instead of stopping it. After connecting one later, run the same command again: it adds that source
+to the agent and leaves the schedule as it is (or moves it, if you pass a new time). If Todoist's
+sign-in expires, the schedule pauses itself and its card says which connector needs reconnecting;
+reconnect it in the MCP panel and switch the schedule back on.
 
 ### Keeping the PC awake for routines
 

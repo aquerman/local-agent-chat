@@ -53,6 +53,10 @@ const chatProjectSchema: Schema<IChatProjectDocument> = new Schema<IChatProjectD
       type: String,
       default: null,
     },
+    coordinatorConversationId: {
+      type: String,
+      default: null,
+    },
     tenantId: {
       type: String,
       index: true,

@@ -63,7 +63,9 @@ endpoints:
     # A graph step is one model call or one tool round. 20 allows about 8-9 tool calls per turn,
     # enough for search -> fetch -> answer chains without letting a looping 9B model spin long.
     recursionLimit: 20
-    maxRecursionLimit: 50
+    # Roadmap 16: raised from 50 so the Researcher agent's own recursion_limit (100, set by
+    # `npm run seed-benny`) is not capped; Benny and other agents keep the default of 20.
+    maxRecursionLimit: 100
     # No hosted Code API (execute_code), no keyed web_search (the websearch MCP covers it) and no
     # OCR service yet, so those three stay off. Everything else is upstream's default set.
     capabilities:
@@ -117,6 +119,12 @@ endpoints:
         # Roadmap 8, folder access: the filesystem server's one read-only tool the patterns above
         # miss. Its write_file, edit_file, create_directory and move_file match nothing, so they ask.
         - 'directory_tree_mcp_filesystem'
+        # Roadmap P1b/P1c: the coordinator's thread tools only queue and read chats inside this
+        # project (the thread's own tools still ask), so they run without asking.
+        - 'start_thread'
+        - 'list_threads'
+        - 'read_summary'
+        - 'post_to_thread'
         # Roadmap 2.2, browser. LibreChat drops the server-name prefix, so Playwright MCP's
         # `browser_navigate` is `navigate_mcp_browser` here (`find_mcp_browser` is matched by
         # `find*` above). Reading and moving between allowed sites runs without asking: the site
@@ -295,7 +303,8 @@ mcpServers:
 # Artifacts offline (roadmap 5c): nothing to switch on in this file. Artifacts are enabled per chat
 # from the Tools menu. For previews without the internet, set in .env:
 #   SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080
-# (port = PORT). See CLAUDE.md "Artifacts offline"; React previews still need codesandbox.io.
+# (port = PORT). See CLAUDE.md "Artifacts offline". React previews use it too (roadmap 5c
+# follow-up): their libraries are bundled from npm at build time, nothing to configure here.
 
 # Roadmap 7: Memory. Upstream's memory agent extracts durable facts after each user turn and
 # every chat sees them in its system prompt; the user views/edits/deletes them under
@@ -401,6 +410,16 @@ modelSpecs:
       preset:
         endpoint: 'agents'
         agent_id: 'agent_benny'
+    # Roadmap 16, deep research: like Claude's Research mode, pick "Researcher" in the model
+    # selector. It shows a plan, reads web sources one sub-question at a time, notes them in the
+    # chat and writes a cited report document (PDF by default). Seeded by `npm run seed-benny`;
+    # its workflow is skill/deep-research/SKILL.md, which Benny can also use for a short run.
+    - name: 'researcher'
+      label: 'Researcher'
+      description: 'Deep research: a plan, web sources, and a cited report document'
+      preset:
+        endpoint: 'agents'
+        agent_id: 'agent_researcher'
 
 
 
@@ -412,3 +431,17 @@ modelSpecs:
 # by file, and the rest is named as left out. See CLAUDE.md "Projects".
 projects:
   knowledgeInlineTokens: 6000
+  # Roadmap P1b/P1c (project threads + coordinator), like a Claude project with a coordinator and
+  # task threads: the first chat in a project becomes its coordinator and gets four tools,
+  # start_thread / list_threads / read_summary / post_to_thread. A thread is an ordinary chat in
+  # the project that runs in the background, one at a time after live chat (one GPU slot), and
+  # hands back a summary (thinking off) that the coordinator sees after the project knowledge.
+  # agentId runs threads started from a plain Benner chat; an agent chat uses its own agent.
+  # Needs the agent trigger queue, which every backend runs. See CLAUDE.md "Project threads".
+  threads:
+    enabled: true
+    agentId: 'agent_benny'
+    concurrency: 1
+    summaryMaxTokens: 300
+    indexLimit: 12
+    briefMaxChars: 4000

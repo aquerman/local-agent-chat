@@ -1958,6 +1958,9 @@
   "com_ui_preview_failed": "Preview unavailable",
   "com_ui_preview_preparing": "Preparing preview…",
   "com_ui_preview_unavailable": "Preview not available for this file type",
+  "com_ui_slide_n": "Slide {{0}}",
+  "com_ui_slides_empty": "This presentation has no slide text.",
+  "com_ui_slides_text_only": "These slides could not be drawn, so only their text is shown. Download the file to see the full layout.",
   "com_ui_previous_sibling": "Previous sibling message",
   "com_ui_privacy_policy": "Privacy policy",
   "com_ui_privacy_policy_url": "Privacy Policy URL",
@@ -3020,5 +3023,12 @@
   "com_insights_invalid_date_range": "Choose an end date after the start date, within {{days}} days.",
   "com_insights_sparkline_accessibility": "{{label}} over time",
   "com_nav_mobile_drawer_strip": "Show chat beside the sidebar on mobile",
-  "com_nav_mobile_drawer_strip_info": "The sidebar stops short of the edge so a strip of the conversation stays visible. Tapping it closes the sidebar."
+  "com_nav_mobile_drawer_strip_info": "The sidebar stops short of the edge so a strip of the conversation stays visible. Tapping it closes the sidebar.",
+  "com_ui_project_threads": "Threads",
+  "com_ui_project_threads_empty": "Ask the coordinator chat to start a task in the background. Its threads show up here.",
+  "com_ui_project_coordinator_open": "Coordinator",
+  "com_ui_thread_status_working": "Working",
+  "com_ui_thread_status_needs_you": "Needs you",
+  "com_ui_thread_status_done": "Done",
+  "com_ui_thread_status_failed": "Failed"
 }

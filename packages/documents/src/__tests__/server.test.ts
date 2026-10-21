@@ -108,6 +108,25 @@ describe('documents server', () => {
     expect(fileOf(created).file.subarray(0, 5).toString()).toBe('%PDF-');
   });
 
+  it('creates a Markdown file and appends a section to it', async () => {
+    const created = await call('create_document', {
+      format: 'md',
+      title: 'Heat pumps',
+      content: '## Summary\n\nThey work [1].',
+    });
+    expect(textOf(created)).toContain('Created "Heat pumps.md" (Markdown file, 1 section,');
+    const id = textOf(created).match(/document_id: ([a-f0-9]+)/)?.[1];
+    expect(fileOf(created).mimeType).toBe('text/markdown');
+
+    const appended = await call('append_section', {
+      document_id: id,
+      content: '## Sources\n\n1. https://example.com/a',
+    });
+    expect(fileOf(appended).file.toString('utf8')).toBe(
+      '# Heat pumps\n\n## Summary\n\nThey work [1].\n\n## Sources\n\n1. https://example.com/a\n',
+    );
+  });
+
   it('returns errors the model can act on', async () => {
     const empty = await call('create_document', { format: 'docx', title: 'T' });
     expect(empty).toMatchObject({ isError: true });

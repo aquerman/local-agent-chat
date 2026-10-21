@@ -22,6 +22,7 @@ const {
   checkAndIncrementPendingRequest,
   exemptFromConcurrencyLimiter,
   isScheduleFireRequest,
+  isProjectThreadFireRequest,
   isUnpersistedPreliminaryParent,
   resolveConversationAnchor,
   getAgentStartupTelemetry,
@@ -728,6 +729,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
   } = req.body;
 
   const isScheduledFire = isScheduleFireRequest(req);
+  /** Fork (roadmap P1b): a project thread's run names its own chat id and keeps its title. */
+  const isProjectThreadFire = isProjectThreadFireRequest(req);
   const scheduleId = isScheduledFire ? bodyScheduleId : null;
   const scheduledFor = isScheduledFire ? bodyScheduledFor : null;
   const scheduleConfigRevision = isScheduledFire ? bodyScheduleConfigRevision : undefined;
@@ -872,7 +875,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
   }
   const isNewConvo = !reqConversationId || reqConversationId === 'new';
   const scheduledNewConversationId =
-    isScheduledFire && typeof req.body?.newConversationId === 'string'
+    (isScheduledFire || isProjectThreadFire) && typeof req.body?.newConversationId === 'string'
       ? req.body.newConversationId
       : null;
   let conversationId = reqConversationId;
@@ -2232,7 +2235,11 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         job.abortController.signal.addEventListener('abort', abortTitleOnJobAbort, { once: true });
       }
       const titleEligible =
-        addTitle && parentMessageId === Constants.NO_PARENT && isNewConvo && !req.body?.isTemporary;
+        addTitle &&
+        parentMessageId === Constants.NO_PARENT &&
+        isNewConvo &&
+        !req.body?.isTemporary &&
+        !isProjectThreadFire;
       const emitTitleEvent = ({ conversationId: titleConversationId, title }) => {
         titleEventPromise = (async () => {
           if (!acceptsTitleEvents || titleAbortController.signal.aborted) {
@@ -2953,7 +2960,8 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
           parentMessageId === Constants.NO_PARENT &&
           isNewConvo &&
           !terminalWasAborted &&
-          !preemptIncomplete;
+          !preemptIncomplete &&
+          !isProjectThreadFire;
 
         // Save user message BEFORE sending final event to avoid race condition
         // where client refetch happens before database is updated

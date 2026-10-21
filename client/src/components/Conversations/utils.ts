@@ -34,6 +34,7 @@ export function areConversationListItemFieldsEqual(
     prevConversation.conversationId === nextConversation.conversationId &&
     prevConversation.title === nextConversation.title &&
     prevConversation.chatProjectId === nextConversation.chatProjectId &&
+    prevConversation.threadStatus === nextConversation.threadStatus &&
     prevConversation.pinned === nextConversation.pinned &&
     prevConversation.isArchived === nextConversation.isArchived &&
     prevConversation.isShared === nextConversation.isShared &&

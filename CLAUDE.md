@@ -90,10 +90,15 @@ syncs conflict only here.
   "requires an OCR service" because no `ocr` or `RAG_API_URL` is configured. Injected text is cut
   at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
 - PDFs uploaded before this override have no stored text and must be re-uploaded.
-- Clicking a PDF or image chip in a sent message opens the original file in the right-hand side panel
-  (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces the other.
-  For files the model read as text, a header button shows the extracted text. Other types and shared
-  links keep the upstream text dialog.
+- Clicking a PDF, image, DOCX or PPTX chip in a sent message opens the original file in the right-hand
+  side panel (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces
+  the other. For files the model read as text, a header button shows the extracted text. Other types
+  (xlsx, legacy .doc/.ppt) and shared links keep the upstream text dialog.
+- DOCX/PPTX render in the browser (`FilePanel/office.ts`: `docx-preview`, `pptx-preview`, lazy-loaded,
+  no network, no LibreOffice) into a script-less sandboxed frame, scaled to the panel width. pptxgenjs
+  decks need `dropMissingParts` (dangling content-type overrides make pptx-preview draw nothing); a deck
+  that still draws no slide falls back to its slide text. Tool-made DOCX/PPTX rows
+  (`Parts/OfficeFileRow.tsx`) open this panel too, instead of the Sandpack office card.
 
 ## Thinking mode
 
@@ -265,12 +270,22 @@ syncs conflict only here.
   bundler. With `CSP_ENABLED`, add `CSP_FRAME_SRC_EXTRA=http://*.localhost:3080` (untested).
 - Self-hosted previews get Tailwind v4 (`@tailwindcss/browser`, the official browser build), not
   the v3 Play CDN. Most utility classes are the same, but a `tailwind.config = {...}` script is ignored.
-- React artifacts still need the internet: Sandpack's runtime bundler (`2-19-8-sandpack.codesandbox.io`)
-  fetches npm packages from codesandbox's packager and CDNs, and none of that is on npm to vendor.
-  Keep `SANDPACK_BUNDLER_URL` unset.
-- Verified 2026-10-20 in the cloud test rig (Chromium; every non-localhost request aborted and
-  unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid and the Code tab rendered with
-  zero external requests. React stopped at the bundler.
+- React artifacts render offline too, on the same switch (page on this machine only). `ArtifactPreview`
+  swaps the `react-ts` template for `static` (`client/src/sandbox/preview.ts`): one `index.html` with
+  the artifact's files as embedded JSON and `/__csb_vendor/react/runtime.js`. That runtime
+  (`client/src/sandbox/runtime.ts`) strips TS/JSX with sucrase, links the files CommonJS-style and
+  renders `App`'s default export into `#root`. Packages come from chunks a second Vite build in
+  `copyArtifactRuntime` makes from npm, one lazy chunk per entry of `SANDBOX_MODULES`
+  (`client/src/sandbox/modules.ts`: React, lucide-react, recharts, three, date-fns, radix, ...), ~3 MB
+  on disk, only imported chunks load. A package not in that list shows an error in the preview
+  instead of loading from npm; add it there (and to client devDependencies) to vendor it. A test keeps
+  the list in sync with the online template's dependencies. lucide-react is the app's 0.528, not the
+  0.394 the prompt names. Keep `SANDPACK_BUNDLER_URL` unset.
+- Verified 2026-10-20/21 in the cloud test rig (Chromium; every non-localhost request aborted and
+  unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid, the Code tab, and React
+  artifacts (useState + Tailwind + lucide icon + recharts chart; shadcn Card/Tabs/Badge + three +
+  date-fns) rendered with zero external requests. Without the env var React still uses codesandbox.
+
 ## Memory
 
 - Upstream memory, switched on in the `memory:` section of `bennychat.yaml` (roadmap 7). After each
@@ -331,6 +346,25 @@ syncs conflict only here.
   (mock model), each a new agents chat with the reply and `lastRun: success`; Run now against the
   CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
   `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
+- Morning brief (roadmap 3): `npm run seed-benny -- [email] --brief [--schedule] [--time HH:MM]
+  [--tz Area/City]` (`config/seed-brief.js`) seeds `agent_morning_brief` (thinking Off, artifacts off)
+  with `list_events_mcp_calendar`, `find-tasks-by-date_mcp_todoist` and `search_mcp_websearch`, and
+  with `--schedule` one daily schedule (default 07:00, the machine's zone; re-running retimes it).
+  Only connectors the owner has connected are attached (calendar: a `mcp_calendar` PluginAuth row;
+  Todoist: an `mcp:todoist` OAuth token), because the schedule's MCP preflight
+  (`packages/api/src/schedules/mcp.ts`) disables a schedule whose agent has an unconnected server
+  (`mcp_configuration_missing` / `mcp_reauth_required`) instead of running without it. Missing
+  sources get no section in the format and are named on its last line ("Not connected: ..."). Re-run after
+  connecting; refreshes rewrite tools and instructions, `--reset` also name/description/model.
+  An expired Todoist grant still pauses the schedule (upstream behaviour, card names the server).
+  Instructions use `{{current_date}}` and follow `skill/morning-brief`'s format. Tests:
+  `npx jest --config config/jest.config.js seed-brief`.
+  Verified 2026-10-21 in the rig (CPU Qwen3-1.7B, fixture ICS, a stdio stand-in for Todoist's
+  `find-tasks-by-date`): seeding, idempotent re-seed, Run now filing a chat with the real events and
+  tasks; with nothing connected the run still succeeds. DuckDuckGo is unreachable from the rig, and
+  the 1.7B then invents headlines (and, with no sources at all, events) despite the instructions:
+  check Qwen3.5-9B.
+
 ## Documents (Word, PDF, PowerPoint)
 
 - `packages/documents` is a stdio MCP server (roadmap 5a) with two tools: `create_document(format, title,
@@ -350,9 +384,10 @@ syncs conflict only here.
   "File attached to the chat", and `createToolEndCallback` (`api/server/controllers/agents/callbacks.js`)
   stores them through `processCodeOutput` with a prepared buffer, the same pipeline as code-interpreter
   outputs. That gives a download chip, per-conversation filename reuse (an append updates the same file)
-  and the upstream office HTML preview card. Files over the endpoint upload limit are dropped with a warning.
-- The preview card renders the office HTML through the artifacts bundler, so offline it needs
-  `SANDPACK_STATIC_BUNDLER_URL` (see "Artifacts offline"); the download chip works regardless.
+  and a row that opens the file side panel (see Attachments). Files over the endpoint upload limit are
+  dropped with a warning.
+- In the chat view DOCX/PPTX rows open the file panel, which needs no bundler or CDN. The upstream
+  Sandpack office card remains only where there is no file panel (shared links) and for xlsx.
 - Benny (`config/seed-benny.js`) lists the server; an existing Benny gets it with
   `npm run seed-benny -- --reset` or in the Agent Builder. `endpoints.agents.toolApproval.allow` has
   `*_mcp_documents`: making a file in the chat does not ask for approval, as in Claude Desktop.
@@ -405,7 +440,7 @@ syncs conflict only here.
   `execute_code`/`web_search`/`ocr` capabilities: no Code API, search keys or OCR here;
   `recursionLimit: 20`), top-level `summarization` (self-summarizes on the agent's own model past the
   32k default budget for model `local`) and a default model spec `benny` → `agent_id: agent_benny`.
-- Agents are DB records, so `npm run seed-benny -- [email] [--reset]` (`config/seed-benny.js`) creates
+- Agents are DB records, so `npm run seed-benny -- [email] [--reset | --reset=researcher]` (`config/seed-benny.js`) creates
   `agent_benny` (provider `Benner`, model `local`, websearch MCP + `ask_user_question`, artifacts off
   to save ~2.5k prompt tokens), owned by the given or oldest user and public-viewable. Idempotent;
   `--reset` restores the defaults. `alwaysOn` MCP servers do not attach to saved agents: Benny lists
@@ -421,6 +456,42 @@ syncs conflict only here.
   name on the conversation (`approvedTools`, `select: false`, data-schemas `toolApprovals.ts`) and
   `createRun` appends it to `allow` (`resolveToolApprovalPolicy` `session` layer). `ask`/`deny`
   patterns still win over it, so do not put write tools in `ask` if they should be rememberable.
+
+## Deep research (roadmap 16)
+
+- Claude's Research UX on the local stack: plan first, sources cited inline, report as a document.
+  The workflow is one skill, `skill/deep-research/SKILL.md`: plan 3-6 sub-questions (shown in the
+  reply, no approval wait) → per sub-question one `search`, 1-3 `fetch` calls with `maxChars: 6000`,
+  then a ≤150-word note in the chat with numbered sources → report via `create_document` (Summary,
+  default `pdf`; `docx`/`md` on request), one `append_section` per sub-question, then `## Sources`.
+  Notes stay in the chat, so the report step needs no re-fetch.
+- **Researcher agent** (`agent_researcher`, model spec `researcher`, seeded with Benny by
+  `npm run seed-benny`): its instructions are the skill body read at seed time (re-seed with
+  `--reset=researcher` after editing the skill), so the 9B model follows it from the first token
+  with no `skill` call (the rig's small model never called `skill` on its own). Tools: websearch +
+  documents only (4 tools, ~2.7k chars of system prompt). `recursion_limit: 100` (one tool round
+  is ~3 graph steps; a 6×3 run plus report needs ~30 rounds), hence `maxRecursionLimit: 100` in
+  `bennychat.yaml`; `model_parameters.maxContextTokens: 96000` so a long run is not summarized
+  away at the 32k default (needs llama-server at ~120k ctx).
+- **Benny** now has `skills_enabled: true` (scope all) in the seed, so the skill catalog and `$`
+  picks work there; this adds the `skill`/`read_file` and, while `interface.skills.create` is on,
+  `create_file`/`edit_file` tools (~1.6k tokens). With Benny's limit of 20 steps the skill's
+  "Short runs" rule applies: 3 sub-questions, 1 source each, one `create_document` call.
+- **No subagents.** The `subagents` capability (parallel sub-question workers in isolated contexts)
+  is not used: on one GPU the workers share the same slots, so parallelism buys little, the tool's
+  own description is ~350 tokens, and a 9B must write a self-contained brief per worker. A whole
+  run stays ~20-30k tokens with the 6000-char fetch cap, well inside 120k, so isolation is not needed.
+- `packages/documents` gained `format: 'md'` (`text/markdown`, title as `#` heading). The client
+  shows a file updated in place by several tool calls (same `file_id`, e.g. each `append_section`)
+  as one chip, its latest version (`latestFileVersions` in `Parts/Attachment.tsx`).
+- Verified 2026-10-21 in the rig with a scripted stand-in model (test-only, not committed) and the
+  real websearch server wrapped with an injected fetch that maps fake public hosts onto 4 local
+  HTML pages (the committed SSRF guard untouched; a direct loopback fetch was still refused):
+  plan, 3 notes with numbered sources, and a cited PDF attached to the chat in 13 tool rounds;
+  prompts grew from ~1.9k to ~5k tokens. Benny, loading the skill through the `skill` tool, did
+  the short run in 8 tool rounds within its 20-step limit (a "3 rounds left" notice arrives at round
+  7) and attached a `.md` report. The rig's Qwen3-1.7B made the plan and searched, but wrote notes
+  from snippets without fetching and never made the document. Not verified: Qwen3.5-9B, live websites.
 
 ## Connectors (Todoist, calendar, email)
 
@@ -507,6 +578,42 @@ syncs conflict only here.
   file; a follow-up turn in the saved chat got the same block; a chat outside the project got none;
   the configured budget truncated as described. UI: instructions dialog, upload and phone width
   (removing a file is covered by the component test only).
+
+## Project threads and coordinator (roadmap P1b/P1c)
+
+- Like a Claude project with a coordinator and task threads. `projects.threads` in
+  `bennychat.yaml` (`configSchema`, default off). The first non-thread chat to run a turn in a
+  project becomes its coordinator (`ChatProject.coordinatorConversationId`, set-if-empty; handed
+  on when that chat is deleted). Only the coordinator gets the four tools `start_thread`,
+  `list_threads`, `read_summary`, `post_to_thread` (`packages/api/src/projects/threads/tools.ts`),
+  as in-process `graphTools` via a fork field `hostGraphTools` on the run agent
+  (`packages/api/src/agents/run.ts`), set in `initialize.js` by `resolveCoordinatorTools`. They
+  are on the `toolApproval.allow` list (they only touch chats inside the project).
+- A thread is a `ProjectThread` record (`packages/data-schemas/src/methods/projectThread.ts`) plus
+  an ordinary chat in the project (`chatProjectId` set, so it gets instructions and knowledge;
+  never the tools or the index). Status working / needs_you / done / failed lives on the record and
+  is mirrored to `conversation.threadStatus` for the list badges (`ThreadStatusChip`). Route:
+  `GET /api/projects/:id/threads`; the project page shows a Threads card and a Coordinator button.
+- Runner: `createProjectThreadService` (`packages/api/src/projects/threads/service.ts`), wired in
+  `api/server/services/Projects/threads.js` and started after the schedule engine. Runs go through
+  the durable agent trigger queue (`enqueueAgentTrigger`, `fire` for the first run with the
+  thread's own `newConversationId`, `continue` for `post_to_thread`), source type
+  `project_thread` (`isProjectThreadFireRequest`; `request.js` honors `newConversationId` and skips
+  auto-titles for it). One at a time (`concurrency`, default 1) and only when no other generation
+  is running, so a thread starts after the coordinator's reply and waits behind live chat.
+  `GenerationJobManager.onGenerationSettled` finishes a run; a 15 s sweep catches approval pauses
+  (`requires_action` -> needs_you), missed settles and lost runs (failed after 30 min).
+- Finish: a summary step (`summary.ts`) calls the agent's custom endpoint `/chat/completions`
+  directly with thinking off (`chat_template_kwargs.enable_thinking: false`), ≤`summaryMaxTokens`
+  (300), from the brief plus the thread's final reply; on failure it keeps the reply's start.
+  The coordinator's project block ends with its role line plus `<project_threads>` (finished
+  threads only, newest `indexLimit`, title/status/summary), so it changes only when a thread
+  finishes and the prefix cache holds. Notifications: `onStatusChange` in the wiring is the hook
+  point for the N15 Notifier.
+- Single backend per database (the runner is in-process, like schedules). Verified 2026-10-21 in
+  the rig with a scripted stand-in model and with Qwen3-1.7B on CPU: coordinator called
+  `start_thread`, the thread ran after the reply, finished with a summary, showed done, and the
+  coordinator's next turn had the summary in its system prompt.
 
 ## Keyboard shortcuts
 

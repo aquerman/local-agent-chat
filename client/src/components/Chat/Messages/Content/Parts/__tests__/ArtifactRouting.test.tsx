@@ -715,6 +715,23 @@ describe('AttachmentGroup routing', () => {
     expect(container.textContent).toMatch(/test_file\.txt/);
   });
 
+  it('shows a file updated in place by several tool calls once, as its latest version', () => {
+    const versions = [1, 2, 3].map((n) =>
+      baseAttachment({
+        file_id: 'report',
+        filename: `report-v${n}.zip`,
+        bytes: n * 1000,
+      }),
+    );
+    const other = baseAttachment({ file_id: 'other', filename: 'other.zip', bytes: 10 });
+    const { container } = renderWith(
+      <AttachmentGroup attachments={[versions[0], other, versions[1], versions[2]]} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'com_ui_show_n_files' }));
+    const chips = Array.from(container.querySelectorAll('[data-testid="file-container"]'));
+    expect(chips.map((chip) => chip.textContent)).toEqual(['report-v3.zip', 'other.zip']);
+  });
+
   it('sinks empty files below non-empty siblings within the file bucket', () => {
     // Without the salience sort, an early-arriving 0-byte file would
     // render first and visually upstage the real artifact below it.

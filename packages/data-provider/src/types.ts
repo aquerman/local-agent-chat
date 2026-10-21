@@ -417,8 +417,32 @@ export type TChatProject = {
   conversationCount: number;
   lastConversationAt?: string | null;
   lastConversationId?: string | null;
+  /** The project's coordinator chat, which can start and follow task threads. */
+  coordinatorConversationId?: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Where a project task thread stands: running or queued, paused on the user, finished, failed. */
+export type TProjectThreadStatus = 'working' | 'needs_you' | 'done' | 'failed';
+
+/** A task thread the project coordinator started: an ordinary chat in the project. */
+export type TProjectThread = {
+  id: string;
+  projectId: string;
+  conversationId: string;
+  title: string;
+  status: TProjectThreadStatus;
+  /** The thread's hand-back to the coordinator, written when it finishes. */
+  summary?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string | null;
+};
+
+export type TProjectThreadsResponse = {
+  threads: TProjectThread[];
 };
 
 export type TCreateChatProjectRequest = {

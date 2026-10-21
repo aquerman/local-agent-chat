@@ -13,6 +13,12 @@ export interface Rendered {
 
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
+/** A Markdown file: the title as its only `#` heading, then the sections as written. */
+export function joinMarkdown(title: string, sections: string[]): string {
+  const body = sections.map((section) => section.trim()).filter((section) => section !== '');
+  return `${[`# ${title}`, ...body].join('\n\n')}\n`;
+}
+
 export async function renderDocument(
   doc: StoredDocument,
   config: Config,
@@ -33,6 +39,10 @@ export async function renderDocument(
         launch,
       });
       return { file, extent: plural(countPdfPages(file), 'page') };
+    }
+    case 'md': {
+      const file = Buffer.from(joinMarkdown(title, sections), 'utf8');
+      return { file, extent: plural(sections.length, 'section') };
     }
     case 'pptx': {
       const file = await renderPptx({ title, slides });

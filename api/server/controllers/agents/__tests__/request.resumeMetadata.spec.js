@@ -260,6 +260,7 @@ jest.mock('@librechat/api', () => ({
   sendEvent: jest.fn(),
   logAgentMemorySnapshot: jest.fn(),
   isScheduleFireRequest: (...args) => mockIsScheduleFireRequest(...args),
+  isProjectThreadFireRequest: () => false,
   exemptFromConcurrencyLimiter: (...args) => mockExemptFromConcurrencyLimiter(...args),
   toPendingSteer: jest.fn((item) => item),
   /** Recorded onto the job so the steer route can honour the OWNING replica's
