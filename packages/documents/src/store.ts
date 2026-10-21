@@ -4,13 +4,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Slide } from '~/slides';
 import { DocumentsError } from '~/errors';
 
-export const FORMATS = ['docx', 'pdf', 'pptx'] as const;
+export const FORMATS = ['docx', 'pdf', 'pptx', 'md'] as const;
 export type Format = (typeof FORMATS)[number];
 
 export const MIME_TYPES: Record<Format, string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   pdf: 'application/pdf',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  md: 'text/markdown',
 };
 
 /** What a document is made from. The file is re-rendered from this after every append. */
@@ -19,7 +20,7 @@ export interface StoredDocument {
   format: Format;
   title: string;
   filename: string;
-  /** Markdown sections, for docx and pdf. */
+  /** Markdown sections, for docx, pdf and md. */
   sections: string[];
   /** Slide outline, for pptx. */
   slides: Slide[];

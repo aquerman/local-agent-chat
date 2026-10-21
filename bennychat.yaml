@@ -63,7 +63,9 @@ endpoints:
     # A graph step is one model call or one tool round. 20 allows about 8-9 tool calls per turn,
     # enough for search -> fetch -> answer chains without letting a looping 9B model spin long.
     recursionLimit: 20
-    maxRecursionLimit: 50
+    # Roadmap 16: raised from 50 so the Researcher agent's own recursion_limit (100, set by
+    # `npm run seed-benny`) is not capped; Benny and other agents keep the default of 20.
+    maxRecursionLimit: 100
     # No hosted Code API (execute_code), no keyed web_search (the websearch MCP covers it) and no
     # OCR service yet, so those three stay off. Everything else is upstream's default set.
     capabilities:
@@ -361,6 +363,16 @@ modelSpecs:
       preset:
         endpoint: 'agents'
         agent_id: 'agent_benny'
+    # Roadmap 16, deep research: like Claude's Research mode, pick "Researcher" in the model
+    # selector. It shows a plan, reads web sources one sub-question at a time, notes them in the
+    # chat and writes a cited report document (PDF by default). Seeded by `npm run seed-benny`;
+    # its workflow is skill/deep-research/SKILL.md, which Benny can also use for a short run.
+    - name: 'researcher'
+      label: 'Researcher'
+      description: 'Deep research: a plan, web sources, and a cited report document'
+      preset:
+        endpoint: 'agents'
+        agent_id: 'agent_researcher'
 
 
 
