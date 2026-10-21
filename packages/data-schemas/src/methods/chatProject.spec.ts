@@ -87,6 +87,35 @@ describe('ChatProject methods', () => {
     expect(list.projects[0].name).toBe('Customer Alpha Updated');
   });
 
+  it('stores an icon and a color, clears them with null, and drops unknown values', async () => {
+    const created = await methods.createChatProject('user-1', {
+      name: 'Garden',
+      icon: 'leaf',
+      color: 'green',
+    });
+    expect(created).toMatchObject({ icon: 'leaf', color: 'green' });
+
+    const plain = await methods.createChatProject('user-1', { name: 'Plain' });
+    expect(plain).toMatchObject({ icon: null, color: null });
+
+    const projectId = created._id!.toString();
+    const recolored = await methods.updateChatProject('user-1', projectId, { color: 'blue' });
+    expect(recolored).toMatchObject({ icon: 'leaf', color: 'blue', name: 'Garden' });
+
+    const cleared = await methods.updateChatProject('user-1', projectId, {
+      icon: null,
+      color: null,
+    });
+    expect(cleared).toMatchObject({ icon: null, color: null });
+
+    const unknown = await methods.createChatProject('user-1', {
+      name: 'Odd',
+      icon: 'not-an-icon' as never,
+      color: 'chartreuse' as never,
+    });
+    expect(unknown).toMatchObject({ icon: null, color: null });
+  });
+
   it('filters projects by name or description search', async () => {
     await methods.createChatProject(user, {
       name: 'Customer Alpha',

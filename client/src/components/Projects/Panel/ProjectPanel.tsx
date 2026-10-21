@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Constants, QueryKeys } from 'librechat-data-provider';
 import { Button, Spinner, TooltipAnchor } from '@librechat/client';
-import { ChevronDown, Folder, MessagesSquare, Plus, Settings2, X } from 'lucide-react';
+import { ChevronDown, MessagesSquare, Plus, Settings2, X } from 'lucide-react';
 import type {
   TConversation,
   TProjectThread,
@@ -16,6 +16,7 @@ import { useLocalize, useNavigateToConvo } from '~/hooks';
 import ProjectKnowledge from '../ProjectKnowledge';
 import ThreadStatusChip from '../ThreadStatusChip';
 import { useProjectThreadList } from '../threads';
+import ProjectIcon from '../ProjectIcon';
 import { cn } from '~/utils';
 
 type ProjectPanelProps = {
@@ -183,7 +184,7 @@ function ProjectPanel({
       className={cn('flex h-full min-h-0 flex-col bg-presentation text-text-primary', className)}
     >
       <div className="flex h-[52px] shrink-0 items-center gap-2 px-3">
-        <Folder className="h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
+        <ProjectIcon project={project} className="h-4 w-4" />
         <h2 id={headingId} className="min-w-0 flex-1 truncate text-sm font-semibold">
           {project.name}
         </h2>

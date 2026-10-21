@@ -22,6 +22,7 @@ import type {
   TThinkingBudgets,
   TAgentsEndpoint,
 } from './config';
+import type { TChatProjectColor, TChatProjectIcon } from './projects';
 import type { StatefulCodeEnvironment } from './stateful-code';
 import type { CodeApprovalMode } from './code/approval';
 import type { EToolResources } from './types/tools';
@@ -413,6 +414,10 @@ export type TChatProject = {
   instructions?: string;
   /** Files whose content every chat in the project can draw on. */
   knowledgeFileIds?: string[];
+  /** Icon shown wherever the project appears; no icon shows a folder. */
+  icon?: TChatProjectIcon | null;
+  /** Tint of the icon; no color uses the theme's neutral text color. */
+  color?: TChatProjectColor | null;
   user?: string;
   conversationCount: number;
   lastConversationAt?: string | null;
@@ -449,6 +454,8 @@ export type TCreateChatProjectRequest = {
   name: string;
   description?: string;
   instructions?: string;
+  icon?: TChatProjectIcon | null;
+  color?: TChatProjectColor | null;
 };
 
 export type TUpdateChatProjectRequest = Partial<TCreateChatProjectRequest> & {

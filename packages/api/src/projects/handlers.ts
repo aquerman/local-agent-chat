@@ -1,3 +1,4 @@
+import { isChatProjectIcon, isChatProjectColor } from 'librechat-data-provider';
 import {
   logger,
   isValidObjectIdString,
@@ -14,7 +15,7 @@ import type {
   CreateChatProjectInput,
   UpdateChatProjectInput,
 } from '@librechat/data-schemas';
-import type { TProjectThread } from 'librechat-data-provider';
+import type { TProjectThread, TChatProjectIcon, TChatProjectColor } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 
 import { normalizeLimit, queryString } from '~/utils';
@@ -87,6 +88,31 @@ const normalizeSortDirection = (
   return sortDirection === 'asc' || sortDirection === 'desc' ? sortDirection : undefined;
 };
 
+type Appearance = { icon?: TChatProjectIcon | null; color?: TChatProjectColor | null };
+
+/** Reads `icon` and `color` from a body: absent stays absent, null clears, anything else
+ *  must name an entry of the fixed set. Returns the field at fault when one does not. */
+const parseAppearance = (
+  body: ProjectRequest['body'],
+): { appearance: Appearance } | { invalid: 'icon' | 'color' } => {
+  const appearance: Appearance = {};
+  const icon: unknown = body?.icon;
+  if (icon !== undefined) {
+    if (icon !== null && !isChatProjectIcon(icon)) {
+      return { invalid: 'icon' };
+    }
+    appearance.icon = icon;
+  }
+  const color: unknown = body?.color;
+  if (color !== undefined) {
+    if (color !== null && !isChatProjectColor(color)) {
+      return { invalid: 'color' };
+    }
+    appearance.color = color;
+  }
+  return { appearance };
+};
+
 const createProjectInput = (req: ProjectRequest): CreateChatProjectInput | null => {
   const name = normalizeString(req.body?.name);
   if (!name) {
@@ -140,9 +166,16 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
     if (!input) {
       return res.status(400).json({ error: 'name is required' });
     }
+    const parsed = parseAppearance(req.body);
+    if ('invalid' in parsed) {
+      return res.status(400).json({ error: `unknown project ${parsed.invalid}` });
+    }
 
     try {
-      const project = await deps.createChatProject(getUserId(req), input);
+      const project = await deps.createChatProject(getUserId(req), {
+        ...input,
+        ...parsed.appearance,
+      });
       return res.status(201).json(project);
     } catch (error) {
       logger.error('[projects] Error creating project', error);
@@ -218,6 +251,11 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
     if (req.body?.instructions !== undefined) {
       input.instructions = typeof req.body.instructions === 'string' ? req.body.instructions : '';
     }
+    const parsed = parseAppearance(req.body);
+    if ('invalid' in parsed) {
+      return res.status(400).json({ error: `unknown project ${parsed.invalid}` });
+    }
+    Object.assign(input, parsed.appearance);
 
     try {
       const project = await deps.updateChatProject(getUserId(req), projectId, input);

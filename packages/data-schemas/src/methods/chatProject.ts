@@ -1,9 +1,12 @@
 import {
+  isChatProjectIcon,
+  isChatProjectColor,
   MAX_CHAT_PROJECT_NAME_LENGTH,
   MAX_CHAT_PROJECT_KNOWLEDGE_FILES,
   MAX_CHAT_PROJECT_DESCRIPTION_LENGTH,
   MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH,
 } from 'librechat-data-provider';
+import type { TChatProjectColor, TChatProjectIcon } from 'librechat-data-provider';
 import type { FilterQuery, Model, SortOrder, Types } from 'mongoose';
 import type { IChatProject, IChatProjectDocument, IConversation, IMongoFile } from '~/types';
 import { buildRetentionVisibilityFilter } from '~/utils/retention';
@@ -18,6 +21,8 @@ export type CreateChatProjectInput = {
   name: string;
   description?: string | null;
   instructions?: string | null;
+  icon?: TChatProjectIcon | null;
+  color?: TChatProjectColor | null;
 };
 
 export type UpdateChatProjectInput = Partial<CreateChatProjectInput>;
@@ -151,11 +156,19 @@ function normalizeLimit(limit?: number): number {
 const sanitizeInstructions = (instructions?: string | null): string =>
   instructions?.trim().slice(0, MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH) ?? '';
 
+const sanitizeIcon = (icon?: string | null): TChatProjectIcon | null =>
+  isChatProjectIcon(icon) ? icon : null;
+
+const sanitizeColor = (color?: string | null): TChatProjectColor | null =>
+  isChatProjectColor(color) ? color : null;
+
 function sanitizeProjectInput(input: CreateChatProjectInput): CreateChatProjectInput {
   return {
     name: input.name.trim().slice(0, MAX_CHAT_PROJECT_NAME_LENGTH),
     description: input.description?.trim().slice(0, MAX_CHAT_PROJECT_DESCRIPTION_LENGTH) ?? '',
     instructions: sanitizeInstructions(input.instructions),
+    icon: sanitizeIcon(input.icon),
+    color: sanitizeColor(input.color),
   };
 }
 
@@ -500,7 +513,9 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     }
 
     const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
-    const update: Partial<Pick<IChatProject, 'name' | 'description' | 'instructions'>> = {};
+    const update: Partial<
+      Pick<IChatProject, 'name' | 'description' | 'instructions' | 'icon' | 'color'>
+    > = {};
     if (typeof input.name === 'string') {
       const name = input.name.trim().slice(0, MAX_CHAT_PROJECT_NAME_LENGTH);
       if (!name) {
@@ -514,6 +529,12 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     }
     if (input.instructions !== undefined) {
       update.instructions = sanitizeInstructions(input.instructions);
+    }
+    if (input.icon !== undefined) {
+      update.icon = sanitizeIcon(input.icon);
+    }
+    if (input.color !== undefined) {
+      update.color = sanitizeColor(input.color);
     }
 
     return await ChatProject.findOneAndUpdate(

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { Folder } from 'lucide-react';
 import type { TChatProject } from 'librechat-data-provider';
 import type { OptionWithIcon } from '~/common';
+import ProjectIcon from '~/components/Projects/ProjectIcon';
 import { useProjectsInfiniteQuery } from '~/data-provider';
 
 /** Shared with `ProjectButton`, so every project surface reads one cached page set
@@ -69,7 +69,7 @@ export function useChatProjectPicker(enabled = true): ChatProjectPicker {
       options.push({
         label: project.name,
         value: project._id,
-        icon: <Folder className="h-4 w-4 text-text-secondary" aria-hidden="true" />,
+        icon: <ProjectIcon project={project} className="h-4 w-4" />,
       });
     }
     return { items: options, namesById: names };

@@ -1,3 +1,4 @@
+import type { TChatProjectColor, TChatProjectIcon } from 'librechat-data-provider';
 import type { Document, Types } from 'mongoose';
 
 export interface IChatProject {
@@ -8,6 +9,10 @@ export interface IChatProject {
   instructions?: string;
   /** `file_id`s of the project's knowledge files, in the order they were added. */
   knowledgeFileIds?: string[];
+  /** Icon shown wherever the project appears; null shows a folder. */
+  icon?: TChatProjectIcon | null;
+  /** Tint of the icon; null uses the theme's neutral text color. */
+  color?: TChatProjectColor | null;
   user: string;
   conversationCount: number;
   lastConversationAt?: Date | null;

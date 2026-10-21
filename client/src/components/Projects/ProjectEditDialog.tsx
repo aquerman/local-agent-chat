@@ -14,7 +14,9 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TChatProject } from 'librechat-data-provider';
+import type { ProjectAppearanceValue } from './ProjectAppearance';
 import { useUpdateProjectMutation } from '~/data-provider';
+import ProjectAppearance from './ProjectAppearance';
 import { NotificationSeverity } from '~/common';
 import { useLocalize } from '~/hooks';
 
@@ -24,12 +26,18 @@ type ProjectEditDialogProps = {
   project: TChatProject;
 };
 
+const appearanceOf = (project: TChatProject): ProjectAppearanceValue => ({
+  icon: project.icon ?? null,
+  color: project.color ?? null,
+});
+
 export default function ProjectEditDialog({ open, onOpenChange, project }: ProjectEditDialogProps) {
   const localize = useLocalize();
   const formId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? '');
+  const [appearance, setAppearance] = useState<ProjectAppearanceValue>(() => appearanceOf(project));
   const [wasOpen, setWasOpen] = useState(open);
   const updateProject = useUpdateProjectMutation();
   const { showToast } = useToastContext();
@@ -39,6 +47,7 @@ export default function ProjectEditDialog({ open, onOpenChange, project }: Proje
     if (open) {
       setName(project.name);
       setDescription(project.description ?? '');
+      setAppearance(appearanceOf(project));
     }
   }
 
@@ -53,7 +62,10 @@ export default function ProjectEditDialog({ open, onOpenChange, project }: Proje
   const trimmedName = name.trim();
   const trimmedDescription = description.trim();
   const isUnchanged =
-    trimmedName === project.name && trimmedDescription === (project.description ?? '').trim();
+    trimmedName === project.name &&
+    trimmedDescription === (project.description ?? '').trim() &&
+    appearance.icon === (project.icon ?? null) &&
+    appearance.color === (project.color ?? null);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,6 +78,7 @@ export default function ProjectEditDialog({ open, onOpenChange, project }: Proje
         projectId: project._id,
         name: trimmedName,
         description: trimmedDescription,
+        ...appearance,
       },
       {
         onSuccess: () => onOpenChange(false),
@@ -98,6 +111,16 @@ export default function ProjectEditDialog({ open, onOpenChange, project }: Proje
                 onChange={(event) => setName(event.target.value)}
                 maxLength={MAX_CHAT_PROJECT_NAME_LENGTH}
                 className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label id={`${formId}-icon`} className="text-sm font-medium text-text-primary">
+                {localize('com_ui_project_icon')}
+              </Label>
+              <ProjectAppearance
+                value={appearance}
+                onChange={setAppearance}
+                labelId={`${formId}-icon`}
               />
             </div>
             <div className="space-y-2">

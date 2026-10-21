@@ -22,7 +22,9 @@ import {
   useToastContext,
 } from '@librechat/client';
 import type { TChatProject } from 'librechat-data-provider';
+import type { ProjectAppearanceValue } from './ProjectAppearance';
 import { useCreateProjectMutation } from '~/data-provider';
+import ProjectAppearance from './ProjectAppearance';
 import { useLocalize } from '~/hooks';
 
 type ProjectCreateDialogProps = {
@@ -32,6 +34,8 @@ type ProjectCreateDialogProps = {
   children?: ReactNode;
   triggerRef?: MutableRefObject<HTMLButtonElement | null>;
 };
+
+const DEFAULT_APPEARANCE: ProjectAppearanceValue = { icon: null, color: null };
 
 export default function ProjectCreateDialog({
   open,
@@ -45,6 +49,7 @@ export default function ProjectCreateDialog({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [appearance, setAppearance] = useState<ProjectAppearanceValue>(DEFAULT_APPEARANCE);
   const createProject = useCreateProjectMutation();
   const { showToast } = useToastContext();
 
@@ -59,6 +64,7 @@ export default function ProjectCreateDialog({
   const resetForm = () => {
     setName('');
     setDescription('');
+    setAppearance(DEFAULT_APPEARANCE);
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -80,6 +86,7 @@ export default function ProjectCreateDialog({
       const project = await createProject.mutateAsync({
         name: trimmedName,
         ...(trimmedDescription ? { description: trimmedDescription } : {}),
+        ...appearance,
       });
       resetForm();
       onOpenChange(false);
@@ -113,6 +120,16 @@ export default function ProjectCreateDialog({
                 placeholder={localize('com_ui_project_name_placeholder')}
                 maxLength={MAX_CHAT_PROJECT_NAME_LENGTH}
                 className="w-full"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label id={`${formId}-icon`} className="text-sm font-medium text-text-primary">
+                {localize('com_ui_project_icon')}
+              </Label>
+              <ProjectAppearance
+                value={appearance}
+                onChange={setAppearance}
+                labelId={`${formId}-icon`}
               />
             </div>
             <div className="space-y-2">

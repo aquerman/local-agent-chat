@@ -554,6 +554,10 @@ syncs conflict only here.
   files** (roadmap P1a). Both live on the `ChatProject` record (`instructions`, 8000 chars;
   `knowledgeFileIds`, max 50, `packages/data-schemas/src/methods/chatProject.ts`) and are edited in
   the project page's right column (`ProjectKnowledge.tsx`; stacked above the chat list on a phone).
+- Each project has an optional `icon` (24 lucide names) and `color` (9 names), fixed sets in
+  `packages/data-provider/src/projects.ts`; null shows the neutral folder. Picked in the create/edit
+  dialog (`ProjectAppearance.tsx`), drawn by `ProjectIcon`/`ProjectIconTile` everywhere a project
+  appears. The colors are CSS variables `--project-<name>` in `client/src/style.css`, one value per theme.
 - Knowledge files are ordinary uploads made with `tool_resource=context`, so their text is
   extracted once on upload (same parsers as "Attachments"). Removing one detaches it; the file
   itself stays in the user's files. Routes: `GET/POST /api/projects/:id/knowledge`,
