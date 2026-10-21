@@ -128,7 +128,9 @@ export function createProjectThreadMethods(
       .lean<IProjectThread>();
   }
 
-  async function adoptProjectThread(input: AdoptProjectThreadInput): Promise<IProjectThread | null> {
+  async function adoptProjectThread(
+    input: AdoptProjectThreadInput,
+  ): Promise<IProjectThread | null> {
     return await model()
       .findOneAndUpdate(
         { user: input.user, conversationId: input.conversationId },

@@ -61,7 +61,7 @@ function createHarness(overrides: Partial<ProjectThreadServiceDeps> = {}) {
     getRunningGenerationCount: async () =>
       liveChats + [...jobs.values()].filter((status) => status === 'running').length,
     getPrincipal: async (id) => ({ id }),
-    getConfig: async () => ({ concurrency: 1, summaryMaxTokens: 20 }),
+    getConfig: async () => ({ concurrency: 1, summaryMaxTokens: 50 }),
     createSummarizer:
       () =>
       async ({ reply }) =>
@@ -586,7 +586,7 @@ describe('resolveCoordinatorTools', () => {
 });
 
 describe('talking to a thread directly', () => {
-  const later = (ms: number) => new Date(Date.now() + ms);
+  const ago = (ms: number) => new Date(Date.now() - ms);
   const userMessage = (text: string, createdAt: Date): ThreadMessage => ({
     messageId: `u-${Math.random()}`,
     isCreatedByUser: true,
@@ -601,7 +601,7 @@ describe('talking to a thread directly', () => {
         enabled: true,
         agentId: 'agent_benny',
         concurrency: 1,
-        summaryMaxTokens: 20,
+        summaryMaxTokens: 50,
         summarizeUserTurns: true,
       }),
       createSummarizer: () => async (request) => {
@@ -629,11 +629,15 @@ describe('talking to a thread directly', () => {
       conversationId: thread.conversationId,
       status: 'complete',
     });
+    await mongoose.models.ProjectThread.updateOne(
+      { _id: thread._id },
+      { $set: { finishedAt: ago(10_000) } },
+    );
 
     harness.messages.set(thread.conversationId, [
       reply('KLM at 89 euros on 12 May.'),
-      userMessage('And in June?', later(1000)),
-      reply('TAP at 95 euros on 3 June.', { createdAt: later(2000) }),
+      userMessage('And in June?', ago(2000)),
+      reply('TAP at 95 euros on 3 June.', { createdAt: ago(1000) }),
     ]);
     await harness.service.handleSettled({
       userId,
@@ -661,7 +665,7 @@ describe('talking to a thread directly', () => {
 
   it('leaves the hand-back alone when the option is off', async () => {
     const harness = createHarness({
-      getConfig: async () => ({ enabled: true, concurrency: 1, summaryMaxTokens: 20 }),
+      getConfig: async () => ({ enabled: true, concurrency: 1, summaryMaxTokens: 50 }),
     });
     const thread = await start(harness);
     await harness.service.pump();
@@ -672,8 +676,8 @@ describe('talking to a thread directly', () => {
       status: 'complete',
     });
     harness.messages.set(thread.conversationId, [
-      userMessage('And in June?', later(1000)),
-      reply('TAP at 95 euros on 3 June.', { createdAt: later(2000) }),
+      userMessage('And in June?', ago(2000)),
+      reply('TAP at 95 euros on 3 June.', { createdAt: ago(1000) }),
     ]);
     await harness.service.handleSettled({
       userId,
