@@ -14,6 +14,14 @@ jest.mock('~/data-provider', () => ({
 jest.mock('~/hooks', () => ({
   useLocalize: () => (key: string) => key,
 }));
+jest.mock('../OfficePreview', () => ({
+  __esModule: true,
+  default: ({ blob, kind, title }: { blob: Blob; kind: string; title: string }) => (
+    <div data-testid="office-preview" data-kind={kind} title={title}>
+      {blob.size}
+    </div>
+  ),
+}));
 jest.mock(
   '~/components/Chat/Messages/Content/FilePreviewDialog',
   () =>
@@ -28,6 +36,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   mockPreview.mockReset();
+  jest.mocked(URL.createObjectURL).mockClear();
 });
 
 describe('getFilePanelKind', () => {
@@ -36,10 +45,23 @@ describe('getFilePanelKind', () => {
       'pdf',
     );
     expect(getFilePanelKind({ file_id: 'b', filename: 'b.PNG' })).toBe('image');
-    expect(getFilePanelKind({ file_id: 'c', filename: 'c.docx', type: 'application/msword' })).toBe(
+    expect(getFilePanelKind({ file_id: 'c', filename: 'c.doc', type: 'application/msword' })).toBe(
       null,
     );
     expect(getFilePanelKind({ filename: 'd.pdf' })).toBe(null);
+  });
+
+  it('routes Word and PowerPoint files by extension or MIME type', () => {
+    expect(getFilePanelKind({ file_id: 'a', filename: 'Plan.DOCX' })).toBe('docx');
+    expect(
+      getFilePanelKind({
+        file_id: 'b',
+        filename: 'deck',
+        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      }),
+    ).toBe('pptx');
+    expect(getFilePanelKind({ file_id: 'c', filename: 'old.ppt' })).toBe(null);
+    expect(getFilePanelKind({ file_id: 'd', filename: 'sheet.xlsx' })).toBe(null);
   });
 });
 
@@ -62,6 +84,7 @@ describe('FilePanel', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
     const frame = await screen.findByTitle('com_ui_preview: report.pdf');
     expect(frame).toHaveAttribute('src', 'blob:preview');
+    expect(screen.getByRole('button', { name: 'com_ui_close' })).toHaveFocus();
   });
 
   it('renders images as an image', async () => {
@@ -74,6 +97,20 @@ describe('FilePanel', () => {
       'src',
       'blob:preview',
     );
+  });
+
+  it('hands Office files to the in-browser renderer as the downloaded bytes', async () => {
+    mockPreview.mockResolvedValue({ data: new Blob(['PK-docx']) });
+    renderPanel({
+      file: { file_id: 'doc', filename: 'Plan.docx' },
+      kind: 'docx',
+    });
+    const preview = await screen.findByTestId('office-preview');
+    expect(preview).toHaveAttribute('data-kind', 'docx');
+    expect(preview).toHaveAttribute('title', 'com_ui_preview: Plan.docx');
+    expect(preview).toHaveTextContent('7');
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'com_ui_download Plan.docx' })).toBeInTheDocument();
   });
 
   it('reports a failed download instead of spinning', async () => {

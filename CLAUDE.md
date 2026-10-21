@@ -90,10 +90,15 @@ syncs conflict only here.
   "requires an OCR service" because no `ocr` or `RAG_API_URL` is configured. Injected text is cut
   at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
 - PDFs uploaded before this override have no stored text and must be re-uploaded.
-- Clicking a PDF or image chip in a sent message opens the original file in the right-hand side panel
-  (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces the other.
-  For files the model read as text, a header button shows the extracted text. Other types and shared
-  links keep the upstream text dialog.
+- Clicking a PDF, image, DOCX or PPTX chip in a sent message opens the original file in the right-hand
+  side panel (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces
+  the other. For files the model read as text, a header button shows the extracted text. Other types
+  (xlsx, legacy .doc/.ppt) and shared links keep the upstream text dialog.
+- DOCX/PPTX render in the browser (`FilePanel/office.ts`: `docx-preview`, `pptx-preview`, lazy-loaded,
+  no network, no LibreOffice) into a script-less sandboxed frame, scaled to the panel width. pptxgenjs
+  decks need `dropMissingParts` (dangling content-type overrides make pptx-preview draw nothing); a deck
+  that still draws no slide falls back to its slide text. Tool-made DOCX/PPTX rows
+  (`Parts/OfficeFileRow.tsx`) open this panel too, instead of the Sandpack office card.
 
 ## Thinking mode
 
@@ -379,9 +384,10 @@ syncs conflict only here.
   "File attached to the chat", and `createToolEndCallback` (`api/server/controllers/agents/callbacks.js`)
   stores them through `processCodeOutput` with a prepared buffer, the same pipeline as code-interpreter
   outputs. That gives a download chip, per-conversation filename reuse (an append updates the same file)
-  and the upstream office HTML preview card. Files over the endpoint upload limit are dropped with a warning.
-- The preview card renders the office HTML through the artifacts bundler, so offline it needs
-  `SANDPACK_STATIC_BUNDLER_URL` (see "Artifacts offline"); the download chip works regardless.
+  and a row that opens the file side panel (see Attachments). Files over the endpoint upload limit are
+  dropped with a warning.
+- In the chat view DOCX/PPTX rows open the file panel, which needs no bundler or CDN. The upstream
+  Sandpack office card remains only where there is no file panel (shared links) and for xlsx.
 - Benny (`config/seed-benny.js`) lists the server; an existing Benny gets it with
   `npm run seed-benny -- --reset` or in the Agent Builder. `endpoints.agents.toolApproval.allow` has
   `*_mcp_documents`: making a file in the chat does not ask for approval, as in Claude Desktop.

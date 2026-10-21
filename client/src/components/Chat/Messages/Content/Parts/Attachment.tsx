@@ -3,6 +3,7 @@ import { Button } from '@librechat/client';
 import { Tools } from 'librechat-data-provider';
 import { Loader2, AlertCircle, Download, ChevronDown, Files as FilesIcon } from 'lucide-react';
 import type { TAttachment, TFile, TAttachmentMetadata } from 'librechat-data-provider';
+import type { OfficePanelKind } from '~/components/Chat/FilePanel/kind';
 import type { ToolArtifactType } from '~/utils/artifacts';
 import {
   artifactTypeForAttachment,
@@ -17,6 +18,8 @@ import {
 import { useLocalize, useAttachmentPreviewSync, useExpandCollapse } from '~/hooks';
 import FileContainer from '~/components/Chat/Input/Files/FileContainer';
 import { fileToArtifact, TOOL_ARTIFACT_TYPES } from '~/utils/artifacts';
+import { useFilePanel } from '~/components/Chat/FilePanel/context';
+import OfficeFileRow, { getOfficeRowKind } from './OfficeFileRow';
 import Image from '~/components/Chat/Messages/Content/Image';
 import { ROW_GLYPH_SLOT, TOOL_ROW_CLASSES } from '../rows';
 import ToolMermaidArtifact from './ToolMermaidArtifact';
@@ -470,6 +473,7 @@ const MermaidArtifact = memo(({ attachment }: { attachment: TAttachment }) => {
 MermaidArtifact.displayName = 'MermaidArtifact';
 
 export default function Attachment({ attachment }: { attachment?: TAttachment }) {
+  const filePanel = useFilePanel();
   if (!attachment) {
     return null;
   }
@@ -485,6 +489,10 @@ export default function Attachment({ attachment }: { attachment?: TAttachment })
 
   if (isImageAttachment(attachment)) {
     return <ImageAttachment attachment={attachment} />;
+  }
+  const officeKind = getOfficeRowKind(attachment, filePanel);
+  if (officeKind != null && filePanel != null) {
+    return <OfficeFileRow attachment={attachment} kind={officeKind} filePanel={filePanel} />;
   }
   // Single classification call. The result is threaded into
   // `PanelArtifact` -> `fileToArtifact` so the panel path doesn't
@@ -529,6 +537,7 @@ export function latestFileVersions(attachments: TAttachment[]): TAttachment[] {
 }
 
 export function AttachmentGroup({ attachments }: { attachments?: TAttachment[] }) {
+  const filePanel = useFilePanel();
   if (!attachments || attachments.length === 0) {
     return null;
   }
@@ -540,7 +549,11 @@ export function AttachmentGroup({ attachments }: { attachments?: TAttachment[] }
    * `type` is null while pending so the renderer falls back to
    * FileAttachment (PreviewPlaceholderRow); on resolution it switches
    * to PanelArtifact in place. */
-  const panelRow: Array<{ attachment: TAttachment; type: ToolArtifactType | null }> = [];
+  const panelRow: Array<{
+    attachment: TAttachment;
+    type: ToolArtifactType | null;
+    officeKind?: OfficePanelKind;
+  }> = [];
   const mermaidArtifacts: TAttachment[] = [];
 
   latestFileVersions(attachments).forEach((attachment) => {
@@ -552,6 +565,13 @@ export function AttachmentGroup({ attachments }: { attachments?: TAttachment[] }
     }
     if (isImageAttachment(attachment)) {
       imageAttachments.push(attachment);
+      return;
+    }
+    /* Office files open in the file panel straight from the original bytes, so they need neither
+     * the deferred HTML render nor the artifact view. */
+    const officeKind = getOfficeRowKind(attachment, filePanel);
+    if (officeKind != null) {
+      panelRow.push({ attachment, type: null, officeKind });
       return;
     }
     if ((attachment as Partial<TFile>).status === 'pending') {
@@ -608,7 +628,17 @@ export function AttachmentGroup({ attachments }: { attachments?: TAttachment[] }
       )}
       {orderedPanel.length > 0 && (
         <div className="my-2 flex w-full max-w-full flex-col" data-testid="artifact-row-group">
-          {orderedPanel.map(({ attachment, type }, index) => {
+          {orderedPanel.map(({ attachment, type, officeKind }, index) => {
+            if (officeKind != null && filePanel != null) {
+              return (
+                <OfficeFileRow
+                  attachment={attachment}
+                  kind={officeKind}
+                  filePanel={filePanel}
+                  key={renderAttachmentKey('office', attachment, index)}
+                />
+              );
+            }
             if (type != null) {
               return (
                 <PanelArtifact
