@@ -352,6 +352,15 @@ export default defineConfig(({ command }) => ({
                   if (normalizedId.includes('heic-to')) {
                     return 'heic-converter';
                   }
+                  /* The file panel's DOCX/PPTX renderers stay with their lazy importer instead of
+                   * the startup vendor chunk, so they load only when such a file is opened. */
+                  if (
+                    /node_modules\/(docx-preview|pptx-preview|echarts|zrender|jszip)\//.test(
+                      normalizedId,
+                    )
+                  ) {
+                    return null;
+                  }
 
                   // Existing chunks
                   if (normalizedId.includes('@radix-ui')) {

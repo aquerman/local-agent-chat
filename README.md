@@ -23,8 +23,10 @@ from a phone over Tailscale.
   selector next to Send, header actions in one "…" menu, reply actions on hover, and larger text on
   desktop.
 - **Phone menu.** On a phone the drawer keeps LibreChat's structure with its text one size larger.
-- **Document side panel.** Clicking a PDF or image you attached opens the original file in the
-  right-hand panel. For files the model read as text, a button shows the extracted text.
+- **Document side panel.** Clicking a PDF, image, Word (`.docx`) or PowerPoint (`.pptx`) file, attached
+  by you or made by the model, opens it in the right-hand panel. Word and PowerPoint files are drawn
+  in the browser, offline, with nothing to install; the panel keeps a download button. For files the
+  model read as text, a button shows the extracted text.
 - **PDFs as text.** llama-server cannot take PDF bytes, so PDFs are parsed on upload and their text
   goes into the prompt instead.
 - **Thinking mode.** An Off/Low/Medium/High pill in the input bar sets llama-server's thinking budget
@@ -73,7 +75,7 @@ from a phone over Tailscale.
 - **Word, PDF and PowerPoint files.** Another built-in MCP server (`packages/documents`) lets the
   model create `.docx`, `.pdf` and `.pptx` files from Markdown or a slide outline, in one clean
   house style, and add to them section by section for long documents. The file arrives in the chat
-  as an attachment to download (Word and PowerPoint files also get a preview card). PDFs are
+  as an attachment to download; click it to preview Word and PowerPoint files in the side panel. PDFs are
   printed with the Microsoft Edge that Windows already has; nothing extra to install. Markdown
   (`.md`) files work too.
 - **Project instructions and knowledge.** Like Claude Projects: open a project (Projects in the
