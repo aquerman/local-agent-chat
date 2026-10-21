@@ -75,6 +75,11 @@ from a phone over Tailscale.
   house style, and add to them section by section for long documents. The file arrives in the chat
   as an attachment to download (Word and PowerPoint files also get a preview card). PDFs are
   printed with the Microsoft Edge that Windows already has; nothing extra to install.
+- **Project instructions and knowledge.** Like Claude Projects: open a project (Projects in the
+  sidebar), set instructions ("always answer in British English", "I'm planning a house move") and
+  add files. Every chat in the project follows the instructions and can read the files. Small
+  knowledge is read in full (up to `projects.knowledgeInlineTokens`, 6000 tokens by default); past
+  that, chats get as much as fits and are told which files were left out.
 
 ## Running it (Windows)
 

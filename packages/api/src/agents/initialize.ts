@@ -871,6 +871,11 @@ export interface InitializeAgentParams {
   allowedProviders: Set<string>;
   /** Whether this is the initial agent */
   isInitialAgent?: boolean;
+  /**
+   * The chat project's system block (instructions and inline knowledge). Appended to the
+   * agent's stable `instructions`, after its own, so the prompt prefix stays cacheable.
+   */
+  projectInstructions?: string;
   /** Accessible skill IDs for this user (pre-computed by the caller via ACL query) */
   accessibleSkillIds?: import('mongoose').Types.ObjectId[];
   /** Whether skill file authoring should be exposed even before a user has viewable skills. */
@@ -2271,6 +2276,12 @@ export async function initializeAgent(
     } else {
       agent.instructions = resolvedInstructions;
     }
+  }
+
+  if (params.projectInstructions) {
+    agent.instructions = [agent.instructions, params.projectInstructions]
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   const repositoryInstructionBlock = repositoryInstructionSource

@@ -437,6 +437,38 @@ syncs conflict only here.
   showed the Approve/Reject card and wrote the file only after Approve. Re-run on the agents build
   with a seeded Benny: read and approved write both worked through Benny's folder tools.
 
+## Projects
+
+- Upstream chat projects (name, description, chat grouping; `packages/api/src/projects`,
+  `client/src/components/Projects`) plus Claude Projects-style **instructions** and **knowledge
+  files** (roadmap P1a). Both live on the `ChatProject` record (`instructions`, 8000 chars;
+  `knowledgeFileIds`, max 50, `packages/data-schemas/src/methods/chatProject.ts`) and are edited in
+  the project page's right column (`ProjectKnowledge.tsx`; stacked above the chat list on a phone).
+- Knowledge files are ordinary uploads made with `tool_resource=context`, so their text is
+  extracted once on upload (same parsers as "Attachments"). Removing one detaches it; the file
+  itself stays in the user's files. Routes: `GET/POST /api/projects/:id/knowledge`,
+  `DELETE /api/projects/:id/knowledge/:fileId`.
+- Injection seam: `loadProjectRunContext` (`packages/api/src/projects/context.ts`), called from
+  `api/server/services/Endpoints/agents/initialize.js` beside the other startup reads. Every chat
+  goes through that agents path (custom endpoints run as ephemeral agents), so plain Benner chats
+  and agent runs share it. The project is the saved conversation's `chatProjectId`, or the
+  request's for a new chat. The block (`<project_instructions>`, `<project_knowledge>` with one
+  `<document>` per file) is appended to the primary agent's stable `instructions` inside
+  `initializeAgent` (`projectInstructions`), after the agent's own text and after special-variable
+  resolution, so it stays byte-identical across turns and llama-server reuses the cached prefix.
+  Subagents and title requests do not get it.
+- Knowledge budget: `projects.knowledgeInlineTokens` in `bennychat.yaml` (default 6000, estimated
+  at 4 chars/token, no tokenizer per turn). Under it every file is read in full; over it files are
+  read in order until the budget runs out, the overflowing one cut (`truncated="true"`), the rest
+  named as left out. `planProjectKnowledge` already models a retrieval mode (all files to
+  `file_search` past the budget, `applyProjectSearchFiles`), but the wiring passes
+  `retrievalAvailable: false` until knowledge files are embedded on add.
+- Verified 2026-10-20 in the cloud rig (Qwen3-1.7B, logging proxy): the system message reached
+  llama-server with instructions and file text; the reply followed the instructions and quoted the
+  file; a follow-up turn in the saved chat got the same block; a chat outside the project got none;
+  the configured budget truncated as described. UI: instructions dialog, upload and phone width
+  (removing a file is covered by the component test only).
+
 ## Keyboard shortcuts
 
 - New chat is **Ctrl+N** (⌘N on macOS), changed from upstream's Ctrl+Shift+O in

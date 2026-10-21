@@ -1035,6 +1035,23 @@ export function deleteProject(projectId: string): Promise<t.TDeleteChatProjectRe
   return request.delete(endpoints.projectById(projectId));
 }
 
+export function getProjectKnowledge(projectId: string): Promise<t.TChatProjectKnowledgeResponse> {
+  return request.get(endpoints.projectKnowledge(projectId));
+}
+
+export function addProjectKnowledge(
+  payload: t.TAddChatProjectKnowledgeRequest,
+): Promise<t.TChatProject> {
+  const { projectId, file_ids } = payload;
+  return request.post(endpoints.projectKnowledge(projectId), { file_ids });
+}
+
+export function removeProjectKnowledge(
+  payload: t.TRemoveChatProjectKnowledgeRequest,
+): Promise<t.TChatProject> {
+  return request.delete(endpoints.projectKnowledge(payload.projectId, payload.file_id));
+}
+
 export function assignConversationToProject(
   payload: t.TAssignConversationToProjectRequest,
 ): Promise<t.TAssignConversationToProjectResponse> {

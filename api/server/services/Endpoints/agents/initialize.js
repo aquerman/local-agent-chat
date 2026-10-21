@@ -41,6 +41,7 @@ const {
   encodeAndFormatVideos,
   extractFileContext,
   createScheduleUpstreamTokenProviderResolver,
+  loadProjectRunContext,
 } = require('@librechat/api');
 const {
   ResourceType,
@@ -282,6 +283,19 @@ const initializeClientWithProvider = async ({
     codeCapabilityEnabled || fileSearchCapabilityEnabled
       ? resolveToolRoleGrants({ req, getRoleByName: db.getRoleByName, context: 'initializeClient' })
       : null;
+  /** The chat project's instructions and knowledge, resolved beside the other startup reads. */
+  const projectRunContextPromise = requestConversationPromise.then((conversation) =>
+    loadProjectRunContext(
+      {
+        userId: req.user.id,
+        conversation,
+        requestedProjectId: endpointOption.chatProjectId,
+        projectsConfig: appConfig?.config?.projects,
+        retrievalAvailable: false,
+      },
+      db,
+    ),
+  );
   const backgroundToolsAvailable = enabledCapabilities.has(AgentCapabilities.run_in_background);
   const toolIntentsAvailable = enabledCapabilities.has(AgentCapabilities.tool_intents);
   const deferredToolsAvailable = enabledCapabilities.has(AgentCapabilities.deferred_tools);
@@ -595,6 +609,7 @@ const initializeClientWithProvider = async ({
     { primaryAgent, modelsConfig },
     requestConversation,
     toolRoleGrants,
+    projectRunContext,
   ] = await Promise.all([
     memoryAvailablePromise,
     accessibleSkillIdsPromise,
@@ -604,6 +619,7 @@ const initializeClientWithProvider = async ({
     validatedPrimaryAgentPromise,
     requestConversationPromise,
     toolRoleGrantsPromise,
+    projectRunContextPromise,
   ]);
   /** Preserve the owner-scoped fallback for loaders that share this request. */
   req.resolvedConversation = requestConversation;
@@ -733,6 +749,7 @@ const initializeClientWithProvider = async ({
       endpointOption,
       allowedProviders,
       isInitialAgent: true,
+      projectInstructions: projectRunContext?.instructions,
       accessibleSkillIds: primaryScopedSkillIds,
       skillAuthoringAvailable: primarySkillAuthoringAvailable,
       codeEnvAvailable,

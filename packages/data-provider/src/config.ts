@@ -52,6 +52,8 @@ export {
   MAX_GRAPH_SUBAGENT_MEMBERS,
   MAX_CHAT_PROJECT_NAME_LENGTH,
   MAX_CHAT_PROJECT_DESCRIPTION_LENGTH,
+  MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH,
+  MAX_CHAT_PROJECT_KNOWLEDGE_FILES,
   DEFAULT_RETAINED_ANSWER_TOKENS,
   DEFAULT_MAX_RETAINED_TOOL_COUNT_CHARS,
 } from './limits';
@@ -3048,6 +3050,18 @@ export type TOpenIdDiscoveryConfig = z.infer<typeof openIdDiscoverySchema>;
 /** Maximum CAS attempts per ACL document, including the initial attempt. */
 export const permissionWriteAttemptsSchema = z.number().int().min(1).max(100).default(3);
 
+/**
+ * Fork option (BennyChat roadmap P1a): how a chat project's knowledge files reach its chats.
+ * Knowledge whose extracted text fits `knowledgeInlineTokens` (estimated at 4 characters per
+ * token) goes into the system prompt in full, like Claude Projects. Past it, chats get as much
+ * text as fits, file by file.
+ */
+export const projectsConfigSchema = z.object({
+  knowledgeInlineTokens: z.number().int().nonnegative().max(200_000).default(6000),
+});
+
+export type TProjectsConfig = z.infer<typeof projectsConfigSchema>;
+
 export const configSchema = z.object({
   version: z.string(),
   permissions: z.object({ maxWriteAttempts: permissionWriteAttemptsSchema }).optional(),
@@ -3057,6 +3071,7 @@ export const configSchema = z.object({
   langfuse: langfuseConfigSchema.optional(),
   memory: memorySchema.optional(),
   summarization: summarizationConfigSchema.optional(),
+  projects: projectsConfigSchema.optional(),
   skillSync: skillSyncConfigSchema,
   secureImageLinks: z.boolean().optional(),
   imageOutputType: z.nativeEnum(EImageOutputType).default(EImageOutputType.PNG),

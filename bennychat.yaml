@@ -361,3 +361,14 @@ modelSpecs:
       preset:
         endpoint: 'agents'
         agent_id: 'agent_benny'
+
+
+
+# Roadmap P1a (projects): a chat project's instructions and knowledge files go into the system
+# prompt of every chat in that project, after the agent's own instructions and before anything
+# that changes per turn, so llama-server keeps reusing its cached prompt prefix. Edit them on the
+# project's page (Projects in the sidebar). Knowledge whose extracted text fits this many tokens
+# (estimated at 4 characters per token) is read in full; past it, chats get as much as fits, file
+# by file, and the rest is named as left out. See CLAUDE.md "Projects".
+projects:
+  knowledgeInlineTokens: 6000

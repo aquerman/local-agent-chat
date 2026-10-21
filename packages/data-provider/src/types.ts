@@ -409,6 +409,10 @@ export type TChatProject = {
   _id: string;
   name: string;
   description?: string;
+  /** Added to the system prompt of every chat in the project. */
+  instructions?: string;
+  /** Files whose content every chat in the project can draw on. */
+  knowledgeFileIds?: string[];
   user?: string;
   conversationCount: number;
   lastConversationAt?: string | null;
@@ -420,10 +424,37 @@ export type TChatProject = {
 export type TCreateChatProjectRequest = {
   name: string;
   description?: string;
+  instructions?: string;
 };
 
 export type TUpdateChatProjectRequest = Partial<TCreateChatProjectRequest> & {
   projectId: string;
+};
+
+/** A knowledge file as the project view lists it; the file's text is never sent. */
+export type TChatProjectKnowledgeFile = {
+  file_id: string;
+  filename: string;
+  type: string;
+  bytes: number;
+  /** Whether the file is embedded for retrieval (file_search). */
+  embedded: boolean;
+  /** Characters of extracted text; 0 when the file has none. */
+  textLength: number;
+};
+
+export type TChatProjectKnowledgeResponse = {
+  files: TChatProjectKnowledgeFile[];
+};
+
+export type TAddChatProjectKnowledgeRequest = {
+  projectId: string;
+  file_ids: string[];
+};
+
+export type TRemoveChatProjectKnowledgeRequest = {
+  projectId: string;
+  file_id: string;
 };
 
 export type TDeleteChatProjectResponse = {

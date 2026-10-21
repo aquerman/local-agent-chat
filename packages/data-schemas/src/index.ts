@@ -49,6 +49,8 @@ export {
   createMCPAuthorityCredentialRevision,
   createMCPAuthorityDatabaseSourceRevision,
   digestMCPAuthorityValue,
+  CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR,
+  CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND,
 } from './methods';
 export { FAVORITE_ITEM_TYPES } from './types/favorite';
 export {
