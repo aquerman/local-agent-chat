@@ -1,9 +1,6 @@
 import { useCallback, useId, useMemo, useState } from 'react';
-import { useRecoilValue } from 'recoil';
 import * as Ariakit from '@ariakit/react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Constants, QueryKeys } from 'librechat-data-provider';
 import { ArrowLeft, ArrowUpDown, Check, Folder, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button, Spinner, DropdownPopup, TooltipAnchor, useMediaQuery } from '@librechat/client';
 import type { ConversationListResponse } from 'librechat-data-provider';
@@ -12,12 +9,12 @@ import { useConversationsInfiniteQuery, useProjectQuery } from '~/data-provider'
 import OpenSidebar from '~/components/Chat/Menus/OpenSidebar';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
 import ProjectEditDialog from './ProjectEditDialog';
-import { useLocalize, useNewConvo } from '~/hooks';
 import ProjectKnowledge from './ProjectKnowledge';
-import { cn, clearMessagesCache } from '~/utils';
+import { useStartProjectChat } from './navigation';
 import ProjectChatList from './ProjectChatList';
 import ProjectThreads from './ProjectThreads';
-import store from '~/store';
+import { useLocalize } from '~/hooks';
+import { cn } from '~/utils';
 
 type ChatSortField = 'updatedAt' | 'createdAt';
 
@@ -39,7 +36,6 @@ function renderSortMenuItem(label: string, isSelected: boolean): RenderProp {
 export default function ProjectWorkspace() {
   const localize = useLocalize();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { projectId = '' } = useParams();
   const [sortBy, setSortBy] = useState<ChatSortField>('updatedAt');
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -47,8 +43,7 @@ export default function ProjectWorkspace() {
   const sortMenuId = useId();
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const { data: project, isLoading: isProjectLoading } = useProjectQuery(projectId);
-  const conversation = useRecoilValue(store.conversationByIndex(0));
-  const { newConversation } = useNewConvo();
+  const startNewProjectChat = useStartProjectChat();
   const activeProjectId = project?._id;
   const isSmallScreen = useMediaQuery('(max-width: 768px)');
 
@@ -112,11 +107,8 @@ export default function ProjectWorkspace() {
     if (!activeProjectId) {
       return;
     }
-    clearMessagesCache(queryClient, conversation?.conversationId);
-    queryClient.invalidateQueries([QueryKeys.messages]);
-    navigate(`/c/${Constants.NEW_CONVO}?projectId=${encodeURIComponent(activeProjectId)}`);
-    newConversation({ template: { chatProjectId: activeProjectId } });
-  }, [activeProjectId, conversation?.conversationId, navigate, newConversation, queryClient]);
+    startNewProjectChat(activeProjectId);
+  }, [activeProjectId, startNewProjectChat]);
 
   if (isProjectLoading) {
     return (

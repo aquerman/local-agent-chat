@@ -26,6 +26,7 @@ const mockUseFavorites = jest.fn(() => ({
 }));
 const mockUseGetConversationTags = jest.fn(() => ({ data: [] as unknown[] }));
 const mockConversationsRender = jest.fn();
+const mockConversationsParams = jest.fn();
 const mockSetChatsExpanded = jest.fn();
 const mockMoveToTop = jest.fn();
 const mockUseTitleGeneration = jest.fn(() => {
@@ -79,7 +80,10 @@ jest.mock('~/hooks', () => ({
 
 jest.mock('~/data-provider', () => ({
   __esModule: true,
-  useConversationsInfiniteQuery: () => mockConversationsResult,
+  useConversationsInfiniteQuery: (params: unknown) => {
+    mockConversationsParams(params);
+    return mockConversationsResult;
+  },
   usePinnedConversationsQuery: () => mockPinnedResult,
   useTitleGeneration: () => mockUseTitleGeneration(),
   useGetEndpointsQuery: () => ({ data: {}, isLoading: false }),
@@ -284,5 +288,53 @@ describe('ConversationsSection shared scroll surface', () => {
     });
 
     expect(surface!.scrollTop).toBe(0);
+  });
+});
+
+describe('ConversationsSection project chats', () => {
+  const lastParams = () =>
+    mockConversationsParams.mock.calls[mockConversationsParams.mock.calls.length - 1]?.[0] as {
+      projectId?: string;
+    };
+
+  it('lists only chats outside a project, which show under their project instead', async () => {
+    renderSection();
+    await settleRenders();
+    expect(lastParams().projectId).toBe('unassigned');
+  });
+
+  it('searches every chat, project chats included', async () => {
+    let setSearch: SetterOrUpdater<SearchState>;
+
+    function SearchController() {
+      setSearch = useSetRecoilState(store.search);
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <RecoilRoot>
+          <BrowserRouter>
+            <DndProvider backend={HTML5Backend}>
+              <SearchController />
+              <ConversationsSection />
+            </DndProvider>
+          </BrowserRouter>
+        </RecoilRoot>
+      </QueryClientProvider>,
+    );
+    await settleRenders();
+
+    act(() => {
+      setSearch({
+        query: 'draft',
+        debouncedQuery: 'draft',
+        enabled: true,
+        isTyping: false,
+        isSearching: true,
+      });
+    });
+
+    expect(lastParams().projectId).toBeUndefined();
   });
 });

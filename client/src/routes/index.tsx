@@ -56,6 +56,11 @@ const loadProjectWorkspace = () =>
     Component: m.ProjectWorkspace,
   }));
 
+const loadProjectHome = () =>
+  import('~/components/Projects').then((m) => ({
+    Component: m.ProjectHome,
+  }));
+
 const baseEl = document.querySelector('base');
 const baseHref = baseEl?.getAttribute('href') || '/';
 
@@ -178,6 +183,10 @@ export const router = createBrowserRouter(
             },
             {
               path: 'projects/:projectId',
+              lazy: loadProjectHome,
+            },
+            {
+              path: 'projects/:projectId/overview',
               lazy: loadProjectWorkspace,
             },
             {

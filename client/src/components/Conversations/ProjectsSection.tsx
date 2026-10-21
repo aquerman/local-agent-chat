@@ -2,9 +2,8 @@ import { memo, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { useRecoilValue } from 'recoil';
 import * as Ariakit from '@ariakit/react';
-import { useQueryClient } from '@tanstack/react-query';
-import { Constants, QueryKeys } from 'librechat-data-provider';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Constants } from 'librechat-data-provider';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronRight,
@@ -41,9 +40,10 @@ import {
 } from '~/data-provider';
 import ProjectCreateDialog from '~/components/Projects/ProjectCreateDialog';
 import ProjectDeleteDialog from '~/components/Projects/ProjectDeleteDialog';
+import { useStartProjectChat } from '~/components/Projects/navigation';
 import ProjectEditDialog from '~/components/Projects/ProjectEditDialog';
-import { useLocalize, useLocalStorage, useNewConvo } from '~/hooks';
-import { clearMessagesCache, cn } from '~/utils';
+import { useLocalize, useLocalStorage } from '~/hooks';
+import { cn } from '~/utils';
 import { Collapse } from '~/components/ui';
 import Convo from './Convo';
 import store from '~/store';
@@ -174,11 +174,7 @@ const ProjectItem = memo(
   function ProjectItem({ project, toggleNav, defaultExpanded, isActive }: ProjectItemProps) {
     const localize = useLocalize();
     const navigate = useNavigate();
-    const location = useLocation();
-    const [searchParams, setSearchParams] = useSearchParams();
-    const queryClient = useQueryClient();
-    const { newConversation } = useNewConvo();
-    const conversationId = useRecoilValue(store.conversationIdByIndex(0));
+    const startProjectChat = useStartProjectChat();
     const menuId = useId();
     const [expanded, setExpanded] = useState(defaultExpanded);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -225,33 +221,10 @@ const ProjectItem = memo(
           return;
         }
         event.preventDefault();
-        clearMessagesCache(queryClient, conversationId);
-        queryClient.invalidateQueries([QueryKeys.messages]);
-        /** `navigate()` defers search-param updates; ChatRoute then sees a
-         *  project-scoped draft against an unscoped `/c/new` and wipes it.
-         *  Commit `?projectId` in the same turn, the same way the landing chip does. */
-        if (location.pathname === `/c/${Constants.NEW_CONVO}`) {
-          const nextParams = new URLSearchParams(searchParams);
-          nextParams.set('projectId', project._id);
-          setSearchParams(nextParams, { replace: true, flushSync: true });
-        } else {
-          navigate(projectChatPath);
-        }
-        newConversation({ template: { chatProjectId: project._id } });
+        startProjectChat(project._id);
         toggleNav();
       },
-      [
-        conversationId,
-        location.pathname,
-        navigate,
-        newConversation,
-        project._id,
-        projectChatPath,
-        queryClient,
-        searchParams,
-        setSearchParams,
-        toggleNav,
-      ],
+      [project._id, startProjectChat, toggleNav],
     );
 
     const menuItems = useMemo<MenuItemProps[]>(
@@ -400,7 +373,8 @@ const ProjectsSection = ({ toggleNav, isAuthenticated }: ProjectsSectionProps) =
   const conversationProjectId = conversation?.chatProjectId ?? null;
   /** A project workspace route wins so a leftover conversation scope cannot
    *  highlight a second row at the same time. */
-  const routeProjectId = /^\/projects\/([^/]+)$/.exec(location.pathname)?.[1] ?? null;
+  const routeProjectId =
+    /^\/projects\/([^/]+)(?:\/overview)?$/.exec(location.pathname)?.[1] ?? null;
   const highlightedProjectId = routeProjectId ?? conversationProjectId;
 
   const { data, isLoading } = useProjectsInfiniteQuery(

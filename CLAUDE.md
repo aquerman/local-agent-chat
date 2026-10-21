@@ -610,7 +610,17 @@ syncs conflict only here.
   threads only, newest `indexLimit`, title/status/summary), so it changes only when a thread
   finishes and the prefix cache holds. Notifications: `onStatusChange` in the wiring is the hook
   point for the N15 Notifier.
-- Single backend per database (the runner is in-process, like schedules). Verified 2026-10-21 in
+- UI like a Claude project (beta): `/projects/:id` (`ProjectHome`) opens the project chat, i.e. the
+  coordinator, or a new chat in the project before one exists; the old landing page is
+  `/projects/:id/overview`. Every chat in a project gets a right-hand panel
+  (`client/src/components/Projects/Panel`, rendered by `Chat/Presentation.tsx` beside the shared
+  side-panel slot, hidden while an artifact/file/child thread occupies it): a "Project chat" row,
+  then threads and other project chats newest first with live status and summary, then
+  instructions and files. A thread is an ordinary chat, so opening it is how the user talks to it.
+  Header button toggles it (persisted `projectPanelOpen`); below 1024px it is a drawer.
+- The sidebar's Chats list asks for `projectId: 'unassigned'`, so project chats show only under
+  their project; a search or the archive view still lists every chat.
+
   the rig with a scripted stand-in model and with Qwen3-1.7B on CPU: coordinator called
   `start_thread`, the thread ran after the reply, finished with a summary, showed done, and the
   coordinator's next turn had the summary in its system prompt.

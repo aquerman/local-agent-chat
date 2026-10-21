@@ -35,7 +35,7 @@ export default function ProjectDeleteDialog({
     deleteProject.mutate(project._id, {
       onSuccess: () => {
         onOpenChange(false);
-        if (location.pathname === `/projects/${project._id}`) {
+        if (location.pathname.startsWith(`/projects/${project._id}`)) {
           navigate('/projects');
         }
       },
