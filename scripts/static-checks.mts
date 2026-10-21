@@ -46,6 +46,7 @@ import { join, relative, resolve, dirname } from 'node:path';
 import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 import type { Dirent } from 'node:fs';
+import { SANDBOX_MODULES } from '../client/src/sandbox/modules.ts';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -997,8 +998,13 @@ async function findUnusedPackages(): Promise<CheckOutcome> {
         packagesClientCode,
         manifestDependencies(packagesClientManifest),
       ],
-      // Consumed through a bundler alias, so depcheck cannot see the import.
-      ignored: new Set(['micromark-extension-llm-math']),
+      // Consumed through a bundler alias, so depcheck cannot see the import. The sandbox
+      // modules are bundled for offline React artifacts by a build-time entry vite.config.ts
+      // generates (fork: CLAUDE.md "Artifacts offline").
+      ignored: new Set([
+        'micromark-extension-llm-math',
+        ...SANDBOX_MODULES.map((specifier) => packageName(specifier) ?? specifier),
+      ]),
     },
     {
       name: 'API',
