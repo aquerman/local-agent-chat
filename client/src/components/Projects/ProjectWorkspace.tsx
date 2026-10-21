@@ -13,8 +13,10 @@ import OpenSidebar from '~/components/Chat/Menus/OpenSidebar';
 import ProjectDeleteDialog from './ProjectDeleteDialog';
 import ProjectEditDialog from './ProjectEditDialog';
 import { useLocalize, useNewConvo } from '~/hooks';
+import ProjectKnowledge from './ProjectKnowledge';
 import { cn, clearMessagesCache } from '~/utils';
 import ProjectChatList from './ProjectChatList';
+import ProjectThreads from './ProjectThreads';
 import store from '~/store';
 
 type ChatSortField = 'updatedAt' | 'createdAt';
@@ -231,45 +233,53 @@ export default function ProjectWorkspace() {
           </span>
         </button>
 
-        <section className="mt-8 flex min-h-0 flex-1 flex-col">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="flex items-baseline gap-2 text-sm font-medium text-text-primary">
-              {localize('com_ui_chats')}
-              <span className="tabular-nums text-text-secondary">{project.conversationCount}</span>
-            </h2>
-            <DropdownPopup
-              portal={true}
-              focusLoop={true}
-              unmountOnHide={true}
-              menuId={sortMenuId}
-              isOpen={isSortMenuOpen}
-              setIsOpen={setIsSortMenuOpen}
-              className="z-[125] min-w-44"
-              trigger={
-                <Ariakit.MenuButton
-                  aria-label={localize('com_ui_sort_chats_by')}
-                  className={cn(
-                    'inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-text-primary',
-                    isSortMenuOpen && 'bg-surface-hover text-text-primary',
-                  )}
-                >
-                  <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                  {selectedSortLabel}
-                </Ariakit.MenuButton>
-              }
-              items={sortMenuItems}
+        <div className="mt-8 flex min-h-0 flex-1 flex-col gap-8 md:flex-row md:items-start">
+          <section className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="flex items-baseline gap-2 text-sm font-medium text-text-primary">
+                {localize('com_ui_chats')}
+                <span className="tabular-nums text-text-secondary">
+                  {project.conversationCount}
+                </span>
+              </h2>
+              <DropdownPopup
+                portal={true}
+                focusLoop={true}
+                unmountOnHide={true}
+                menuId={sortMenuId}
+                isOpen={isSortMenuOpen}
+                setIsOpen={setIsSortMenuOpen}
+                className="z-[125] min-w-44"
+                trigger={
+                  <Ariakit.MenuButton
+                    aria-label={localize('com_ui_sort_chats_by')}
+                    className={cn(
+                      'inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-text-primary',
+                      isSortMenuOpen && 'bg-surface-hover text-text-primary',
+                    )}
+                  >
+                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                    {selectedSortLabel}
+                  </Ariakit.MenuButton>
+                }
+                items={sortMenuItems}
+              />
+            </div>
+            <ProjectChatList
+              conversations={conversations}
+              isLoading={isConversationsLoading}
+              isFetchingNextPage={isFetchingNextPage}
+              hasNextPage={hasNextPage}
+              sortBy={sortBy}
+              emptyLabel={localize('com_ui_no_project_chats')}
+              loadMore={() => fetchNextPage()}
             />
+          </section>
+          <div className="order-first flex flex-col gap-4 md:order-none md:w-80 md:shrink-0">
+            <ProjectThreads project={project} />
+            <ProjectKnowledge project={project} />
           </div>
-          <ProjectChatList
-            conversations={conversations}
-            isLoading={isConversationsLoading}
-            isFetchingNextPage={isFetchingNextPage}
-            hasNextPage={hasNextPage}
-            sortBy={sortBy}
-            emptyLabel={localize('com_ui_no_project_chats')}
-            loadMore={() => fetchNextPage()}
-          />
-        </section>
+        </div>
       </div>
     </main>
   );

@@ -1,6 +1,6 @@
 # Web search for the local agent: `packages/websearch` MCP server
 
-Date: 2026-10-01 (updated 2026-10-03)
+Date: 2026-10-01 (updated 2026-10-03; JS rendering added 2026-10-20)
 Status: merged to `main` via aquerman/local-agent-chat#2; this document
 describes the code as shipped
 
@@ -43,6 +43,8 @@ mcpServers:
       WEBSEARCH_MAX_CHARS: '8000'
       WEBSEARCH_TIMEOUT_MS: '10000'
       WEBSEARCH_MAX_BYTES: '5000000'
+      WEBSEARCH_RENDER: 'auto'        # auto | always | off
+      WEBSEARCH_BROWSER_PATH: ''      # empty: Edge, then Chrome, then Playwright's Chromium
 ```
 
 Stdio servers skip LibreChat's MCP SSRF guard entirely (`packages/api/src/auth/domain.ts`,
@@ -50,7 +52,7 @@ Stdio servers skip LibreChat's MCP SSRF guard entirely (`packages/api/src/auth/d
 
 ### Modules
 
-Eight modules, each with one job and a plain-object interface:
+Eleven modules, each with one job and a plain-object interface:
 
 | File | Responsibility |
 |---|---|
@@ -62,13 +64,18 @@ Eight modules, each with one job and a plain-object interface:
 | `server.ts` | Builds the `McpServer` from `@modelcontextprotocol/sdk`, registers the two tools with zod input schemas, formats results as text for the model. |
 | `index.ts` | Connects `server` to `StdioServerTransport`. Nothing else. |
 | `limits.ts` | One constants object for timeouts, byte cap and char caps; env overrides are read here. |
+| `browser.ts` | `readRenderConfig(env)`, `launchCandidates(config, platform)` and `createBrowserPool(config, launchTimeoutMs)`: one shared headless browser, launched on first use, closed after 60 s idle; a failed launch is remembered and surfaces as `BrowserUnavailableError`. |
+| `render.ts` | `renderPage(url, { browsers, resolve, isBlocked, limits }) → { url, html, contentType }`: a fresh cookie-less context per call, pointed at a guarded proxy; returns the DOM after scripts ran. |
+| `proxy.ts` | `startGuardedProxy({ resolve, isBlocked, maxBytes })`: a loopback HTTP forward proxy (plain requests and `CONNECT`) that checks every host with `publicAddresses` and dials the checked address. |
 
 Both network modules take an injected `fetch` function (default: global `fetch`), and `guard.ts`
 takes an injected `Resolver`. Those are the only seams the tests use.
 
 Dependencies: `@modelcontextprotocol/sdk` and `cheerio` (both already in the monorepo tree), `zod`,
-`domhandler` (types only). Build: `tsdown` to a single `dist/index.cjs` with every dependency
-bundled (about 2.8 MB), so the child process does not depend on the caller's `node_modules` layout.
+`domhandler` (types only), `playwright-core` (already in the tree for the e2e tests; it downloads
+no browser on install). Build: `tsdown` to a single `dist/index.cjs` with every dependency
+bundled (about 2.8 MB) except `playwright-core`, which locates its own driver files on disk and is
+therefore `require`d from the root `node_modules` that `npm ci` fills.
 
 ### Security boundary
 
@@ -117,6 +124,47 @@ connection (DNS rebinding) is not covered. Closing that needs the check inside t
   their own lines, and table cells separated by a space. Plain text, not markdown.
 - Output: `Title`, `URL`, blank line, text, then `[truncated at N chars]` when cut.
 
+### JavaScript rendering (`WEBSEARCH_RENDER`)
+
+Interface choice: **no `render` argument**. Like Claude's own `web_fetch`, there is one fetch tool
+and the model never picks a mode; a 9B model would pick it badly and the schema would cost prompt
+tokens on every turn. Behavior per mode:
+
+| Mode | Behavior |
+|---|---|
+| `auto` (default) | Static fetch first. Only when the static text is under `minUsefulChars` (200) is the final URL rendered; the rendered result wins if it has more text. A failed render keeps the static result and appends `Rendering it failed (<reason>).` |
+| `always` | Every page is rendered; errors are returned as they are. |
+| `off` | The static fetch only, as before. |
+
+Without a browser (`BrowserUnavailableError`), both `auto` and `always` return the static page with
+`No browser is available to render it, so this is the page without JavaScript.` and log the launch
+failures to stderr once.
+
+Browser choice: `WEBSEARCH_BROWSER_PATH` if set, else on Windows the installed Microsoft Edge
+(`channel: 'msedge'`, code-signed, so Smart App Control allows it and nothing is downloaded), then
+Chrome, then Playwright's own Chromium (`PLAYWRIGHT_BROWSERS_PATH`); on other platforms the bundled
+Chromium first. Headless, `serviceWorkers: 'block'`, downloads refused, images/media/fonts aborted
+by route interception, WebRTC limited to proxied UDP. The page is only loaded: nothing is clicked,
+typed or submitted.
+
+Rendering steps: check the start URL with `assertPublicHttpUrl`, start a proxy, open a context with
+that proxy, `goto` until `domcontentloaded`, wait up to 5 s (within the timeout) for network idle,
+check the final URL again, then hand `page.content()` to the same cheerio extraction as the static
+path. `WEBSEARCH_TIMEOUT_MS` bounds the navigation; the browser launch has its own timeout of the
+same length.
+
+Why a proxy rather than `page.route`: Playwright's route handler is not called for redirect hops
+(verified with 1.62: a 302 from a routed request is followed without a second callback), so route
+interception alone cannot stop a public page from redirecting the browser to `127.0.0.1`. Every
+connection Chromium opens (navigations, redirects, iframes, fetch/XHR, WebSockets; Playwright also
+forces loopback through the proxy with `<-loopback>`) goes to the per-render proxy, which resolves
+the host, refuses localhost names and any blocked address with `403`, and connects to the address
+it checked, so for rendered pages DNS rebinding is closed too. The proxy counts every upstream byte
+and cuts all connections past `WEBSEARCH_MAX_BYTES`; the render then fails with the usual
+`response larger than <cap>` message. A refused main-frame hop becomes
+`Refused to fetch <hop url>: loopback, link-local and private hosts are blocked`; refused
+subrequests are dropped silently and the page renders without them.
+
 ### Flow per turn
 
 Model calls `search` → reads the list → calls `fetch` on one or two URLs → answers. The server is
@@ -150,7 +198,9 @@ hallucinate a page.
 | HTTP ≥ 400 | `Fetch failed: HTTP <status>`. |
 | Timeout | `Fetch failed: timed out after <ms> ms` / `Search failed: timed out after <ms> ms. Try again or rephrase.` |
 | More than 5 redirects | `Fetch failed: too many redirects`. |
-| Page parses to under ~200 chars (JS-only app) | Return what there is plus `Page content appears to require JavaScript.` |
+| Page parses to under ~200 chars (JS-only app) | `auto`: render it (see above). `off`, or no browser: return what there is plus `Page content appears to require JavaScript.` (and the no-browser note). |
+| Render: redirect or navigation to a private host | `Refused to fetch <hop url>: loopback, link-local and private hosts are blocked`. |
+| Render: still under ~200 chars | `Page has almost no readable text, even with JavaScript.` |
 | Bad arguments from the model | Zod schema rejects at the MCP layer; LibreChat renders that. |
 
 Logging goes to **stderr only**: stdout is the MCP channel and one stray `console.log` corrupts the
@@ -179,12 +229,22 @@ Unit tests with Jest in `packages/websearch` (`cd packages/websearch && npx jest
   boilerplate stripping, `<main>` preference, table cells, truncation marker, JavaScript hint,
   redirects (public, to a loopback literal, to a loopback name, more than five), timeout, network
   error, a public name resolving to a private address.
+- `proxy.test.ts`: the guarded proxy against a local origin: forwarding, refusal of a blocked
+  name, literal, `localhost` and unresolvable host (origin never hit), `CONNECT` allow/refuse, byte cap.
+- `browser.test.ts`: env parsing, launch order per platform, a missing browser remembered by the
+  pool, and the `auto`/`always` static fallback note.
+- `render.test.ts` (real Chromium; skipped when none is found via `WEBSEARCH_BROWSER_PATH`,
+  Playwright's registry or `PLAYWRIGHT_BROWSERS_PATH`): a JS-only page that loads its text with
+  `fetch`, `auto` leaving a text page alone, `off`, `always`, script/iframe/literal requests to a
+  private host blocked, a redirect to a private host refused, the byte cap, an `auto` render failure
+  keeping the static result, and a timeout. Tests map `public.test` to the local server through the
+  injected `Resolver` and an injected `isBlocked` that lets only `127.0.0.1` through.
 - `server.test.ts`: construct the `McpServer`, connect it to an in-memory client via the SDK's
   `InMemoryTransport`, call `tools/list` and both tools end to end with the fake fetch. Real SDK
   exports, no stubbed internals.
 
-Typecheck: `npx tsc --noEmit` in the package; tsdown does not check types. As shipped: 76 tests in
-5 suites, typecheck and ESLint clean. The package is not yet in the root `test:packages:*` scripts,
+Typecheck: `npx tsc --noEmit` in the package; tsdown does not check types. With rendering (2026-10-20): 106 tests in
+8 suites, typecheck and ESLint clean. The package is not yet in the root `test:packages:*` scripts,
 so CI does not run it.
 
 Manual verification, in order:
@@ -229,9 +289,16 @@ Found in review and deferred; none blocks use:
 - Whitespace inside `<pre>` is collapsed, so code samples lose their line breaks.
 - `uddg` is unwrapped from any link, not only `duckduckgo.com` ones.
 - `<title>` can come from an inline SVG when `<head>` has none.
-- DNS rebinding (see Security boundary).
+- DNS rebinding (see Security boundary) on the static path; the render path dials checked addresses.
+- `auto` pays for the static fetch and then the render, so a JS-only page can take up to about
+  twice `WEBSEARCH_TIMEOUT_MS` plus a browser launch (about 1 s, once per idle period).
+- The proxy buffers nothing but counts encrypted `CONNECT` bytes, so TLS overhead counts toward
+  the cap.
+- Only the main frame's DOM is extracted; text inside iframes is not.
+- Headless Chromium announces itself as `HeadlessChrome` in its user agent; some sites refuse it.
 
 ## Out of scope
 
-PDF extraction, result caching, markdown output, an always-on model spec, SearXNG backend, native
+Clicking, typing or any other browser interaction (roadmap item 2.2), screenshots, PDF extraction,
+result caching, markdown output, an always-on model spec, SearXNG backend, native
 `webSearch` badge/citation UI, and changing how LibreChat persists tool output.

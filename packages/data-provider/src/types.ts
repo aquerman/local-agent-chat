@@ -409,21 +409,76 @@ export type TChatProject = {
   _id: string;
   name: string;
   description?: string;
+  /** Added to the system prompt of every chat in the project. */
+  instructions?: string;
+  /** Files whose content every chat in the project can draw on. */
+  knowledgeFileIds?: string[];
   user?: string;
   conversationCount: number;
   lastConversationAt?: string | null;
   lastConversationId?: string | null;
+  /** The project's coordinator chat, which can start and follow task threads. */
+  coordinatorConversationId?: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Where a project task thread stands: running or queued, paused on the user, finished, failed. */
+export type TProjectThreadStatus = 'working' | 'needs_you' | 'done' | 'failed';
+
+/** A task thread the project coordinator started: an ordinary chat in the project. */
+export type TProjectThread = {
+  id: string;
+  projectId: string;
+  conversationId: string;
+  title: string;
+  status: TProjectThreadStatus;
+  /** The thread's hand-back to the coordinator, written when it finishes. */
+  summary?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string | null;
+};
+
+export type TProjectThreadsResponse = {
+  threads: TProjectThread[];
 };
 
 export type TCreateChatProjectRequest = {
   name: string;
   description?: string;
+  instructions?: string;
 };
 
 export type TUpdateChatProjectRequest = Partial<TCreateChatProjectRequest> & {
   projectId: string;
+};
+
+/** A knowledge file as the project view lists it; the file's text is never sent. */
+export type TChatProjectKnowledgeFile = {
+  file_id: string;
+  filename: string;
+  type: string;
+  bytes: number;
+  /** Whether the file is embedded for retrieval (file_search). */
+  embedded: boolean;
+  /** Characters of extracted text; 0 when the file has none. */
+  textLength: number;
+};
+
+export type TChatProjectKnowledgeResponse = {
+  files: TChatProjectKnowledgeFile[];
+};
+
+export type TAddChatProjectKnowledgeRequest = {
+  projectId: string;
+  file_ids: string[];
+};
+
+export type TRemoveChatProjectKnowledgeRequest = {
+  projectId: string;
+  file_id: string;
 };
 
 export type TDeleteChatProjectResponse = {

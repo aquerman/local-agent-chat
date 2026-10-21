@@ -163,6 +163,18 @@ const OpenDocument = ({ filename, type }: { filename: string; type: string }) =>
   );
 };
 
+const OpenFileProbe = () => {
+  const filePanel = useFilePanel();
+  return (
+    <>
+      <span>open file: {filePanel?.openFileId ?? 'none'}</span>
+      <button type="button" onClick={() => filePanel?.closeFile()}>
+        close from chat
+      </button>
+    </>
+  );
+};
+
 const SelectAgentConversation = () => {
   const setConversation = useSetRecoilState(store.conversationByIndex(0));
   return (
@@ -306,22 +318,47 @@ describe('Presentation Artifact loading', () => {
     expect(screen.queryByText('document panel: photo.png')).not.toBeInTheDocument();
   });
 
+  it('opens Word and PowerPoint files in the panel and tells the chat which one is open', () => {
+    renderPresentation(
+      <ChatSurfaceHarness>
+        <RecoilRoot>
+          <Presentation>
+            <OpenDocument
+              filename="deck.pptx"
+              type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            />
+            <OpenFileProbe />
+          </Presentation>
+        </RecoilRoot>
+      </ChatSurfaceHarness>,
+    );
+
+    expect(screen.getByText('open file: none')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /open deck\.pptx/ }));
+    expect(screen.getByText('document panel: deck.pptx')).toBeInTheDocument();
+    expect(screen.getByText('open file: deck.pptx')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'close from chat' }));
+    expect(screen.queryByText('document panel: deck.pptx')).not.toBeInTheDocument();
+    expect(screen.getByText('open file: none')).toBeInTheDocument();
+  });
+
   it('declines files the panel cannot render so callers keep the text dialog', () => {
     renderPresentation(
       <ChatSurfaceHarness>
         <RecoilRoot>
           <Presentation>
             <OpenDocument
-              filename="notes.docx"
-              type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              filename="budget.xlsx"
+              type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             />
           </Presentation>
         </RecoilRoot>
       </ChatSurfaceHarness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /open notes\.docx/ }));
-    expect(screen.getByRole('button', { name: /open notes\.docx false/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /open budget\.xlsx/ }));
+    expect(screen.getByRole('button', { name: /open budget\.xlsx false/ })).toBeInTheDocument();
     expect(screen.queryByText(/document panel/)).not.toBeInTheDocument();
   });
 });

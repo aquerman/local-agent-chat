@@ -1,12 +1,20 @@
-import { isValidObjectIdString, logger } from '@librechat/data-schemas';
+import {
+  logger,
+  isValidObjectIdString,
+  CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR,
+  CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND,
+} from '@librechat/data-schemas';
 
 import type {
+  IProjectThread,
   ChatProjectMethods,
+  ProjectThreadMethods,
   ChatProjectSortBy,
   ChatProjectSortDirection,
   CreateChatProjectInput,
   UpdateChatProjectInput,
 } from '@librechat/data-schemas';
+import type { TProjectThread } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 
 import { normalizeLimit, queryString } from '~/utils';
@@ -35,7 +43,30 @@ type ProjectHandlerDependencies = Pick<
   | 'updateChatProject'
   | 'deleteChatProject'
   | 'assignConversationToProject'
->;
+  | 'listChatProjectKnowledge'
+  | 'addChatProjectKnowledge'
+  | 'removeChatProjectKnowledge'
+> &
+  Partial<Pick<ProjectThreadMethods, 'listProjectThreads'>>;
+
+const toDate = (value?: Date | null): string | null =>
+  value ? new Date(value).toISOString() : null;
+
+/** A thread as the project view shows it; the brief and queue fields stay on the server. */
+export function toProjectThreadResponse(thread: IProjectThread): TProjectThread {
+  return {
+    id: thread._id?.toString() ?? '',
+    projectId: thread.projectId,
+    conversationId: thread.conversationId,
+    title: thread.title,
+    status: thread.status,
+    summary: thread.summary || undefined,
+    error: thread.error || undefined,
+    createdAt: toDate(thread.createdAt) ?? '',
+    updatedAt: toDate(thread.updatedAt) ?? '',
+    finishedAt: toDate(thread.finishedAt),
+  };
+}
 
 const getUserId = (req: ProjectRequest): string => req.user?.id ?? req.user?._id?.toString() ?? '';
 
@@ -65,7 +96,15 @@ const createProjectInput = (req: ProjectRequest): CreateChatProjectInput | null 
   return {
     name,
     description: typeof req.body?.description === 'string' ? req.body.description : '',
+    instructions: typeof req.body?.instructions === 'string' ? req.body.instructions : '',
   };
+};
+
+const parseFileIds = (value: unknown): string[] | null => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+  return value.every((id): id is string => typeof id === 'string' && id.length > 0) ? value : null;
 };
 
 export function createProjectHandlers(deps: ProjectHandlerDependencies): {
@@ -75,6 +114,10 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
   getProject: (req: ProjectRequest, res: Response) => Promise<Response>;
   updateProject: (req: ProjectRequest, res: Response) => Promise<Response>;
   deleteProject: (req: ProjectRequest, res: Response) => Promise<Response>;
+  listKnowledge: (req: ProjectRequest, res: Response) => Promise<Response>;
+  addKnowledge: (req: ProjectRequest, res: Response) => Promise<Response>;
+  removeKnowledge: (req: ProjectRequest, res: Response) => Promise<Response>;
+  listThreads: (req: ProjectRequest, res: Response) => Promise<Response>;
 } {
   async function listProjects(req: ProjectRequest, res: Response): Promise<Response> {
     try {
@@ -172,6 +215,9 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
     if (req.body?.description !== undefined) {
       input.description = typeof req.body.description === 'string' ? req.body.description : '';
     }
+    if (req.body?.instructions !== undefined) {
+      input.instructions = typeof req.body.instructions === 'string' ? req.body.instructions : '';
+    }
 
     try {
       const project = await deps.updateChatProject(getUserId(req), projectId, input);
@@ -203,12 +249,101 @@ export function createProjectHandlers(deps: ProjectHandlerDependencies): {
     }
   }
 
+  async function listKnowledge(req: ProjectRequest, res: Response): Promise<Response> {
+    const { projectId } = req.params;
+    if (!isValidObjectIdString(projectId)) {
+      return res.status(404).json({ error: PROJECT_NOT_FOUND });
+    }
+
+    try {
+      const files = await deps.listChatProjectKnowledge(getUserId(req), projectId);
+      if (!files) {
+        return res.status(404).json({ error: PROJECT_NOT_FOUND });
+      }
+      return res.status(200).json({ files });
+    } catch (error) {
+      logger.error('[projects] Error listing project knowledge', error);
+      return res.status(500).json({ error: 'Error listing project knowledge' });
+    }
+  }
+
+  async function addKnowledge(req: ProjectRequest, res: Response): Promise<Response> {
+    const { projectId } = req.params;
+    if (!isValidObjectIdString(projectId)) {
+      return res.status(404).json({ error: PROJECT_NOT_FOUND });
+    }
+    const fileIds = parseFileIds(req.body?.file_ids);
+    if (!fileIds) {
+      return res.status(400).json({ error: 'file_ids must be a non-empty array of strings' });
+    }
+
+    try {
+      const project = await deps.addChatProjectKnowledge(getUserId(req), projectId, fileIds);
+      if (!project) {
+        return res.status(404).json({ error: PROJECT_NOT_FOUND });
+      }
+      return res.status(200).json(project);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message === CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND) {
+        return res.status(404).json({ error: message });
+      }
+      if (message === CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR) {
+        return res.status(409).json({ error: message });
+      }
+      logger.error('[projects] Error adding project knowledge', error);
+      return res.status(500).json({ error: 'Error adding project knowledge' });
+    }
+  }
+
+  async function removeKnowledge(req: ProjectRequest, res: Response): Promise<Response> {
+    const { projectId, fileId } = req.params;
+    if (!isValidObjectIdString(projectId)) {
+      return res.status(404).json({ error: PROJECT_NOT_FOUND });
+    }
+
+    try {
+      const project = await deps.removeChatProjectKnowledge(getUserId(req), projectId, fileId);
+      if (!project) {
+        return res.status(404).json({ error: PROJECT_NOT_FOUND });
+      }
+      return res.status(200).json(project);
+    } catch (error) {
+      logger.error('[projects] Error removing project knowledge', error);
+      return res.status(500).json({ error: 'Error removing project knowledge' });
+    }
+  }
+
+  async function listThreads(req: ProjectRequest, res: Response): Promise<Response> {
+    const { projectId } = req.params;
+    if (!isValidObjectIdString(projectId)) {
+      return res.status(404).json({ error: PROJECT_NOT_FOUND });
+    }
+
+    try {
+      const userId = getUserId(req);
+      const project = await deps.getChatProject(userId, projectId);
+      if (!project) {
+        return res.status(404).json({ error: PROJECT_NOT_FOUND });
+      }
+      const threads = (await deps.listProjectThreads?.(userId, projectId)) ?? [];
+      return res.status(200).json({ threads: threads.map(toProjectThreadResponse) });
+    } catch (error) {
+      logger.error('[projects] Error listing project threads', error);
+      return res.status(500).json({ error: 'Error listing project threads' });
+    }
+  }
+
   return {
+    listThreads,
     listProjects,
     createProject,
     assignConversationToProject,
     getProject,
     updateProject,
     deleteProject,
+    listKnowledge,
+    addKnowledge,
+    removeKnowledge,
   };
 }

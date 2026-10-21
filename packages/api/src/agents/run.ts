@@ -420,6 +420,9 @@ export function shouldReplayReasoningContent(
 type RunAgent = Omit<Agent, 'tools'> & {
   azureOptions?: t.AzureOptions;
   tools?: GenericTool[];
+  /** Host tools that run in-process in the top-level graph, such as a project coordinator's
+   *  thread tools (fork, roadmap P1b). Never given to subagents. */
+  hostGraphTools?: GenericTool[];
   maxContextTokens?: number;
   /** Pre-ratio context budget from initializeAgent. */
   baseContextTokens?: number;
@@ -2091,6 +2094,7 @@ export async function createRun({
   discoveredToolNames,
   requestBody,
   codeApprovalMode: requestedCodeApprovalMode,
+  sessionApprovedTools,
   user,
   tenantId,
   centralTraceExportEnabled,
@@ -2133,6 +2137,8 @@ export async function createRun({
   streamUsage?: boolean;
   requestBody?: t.RequestBody;
   codeApprovalMode?: CodeApprovalMode;
+  /** Tools the user approved for the rest of this conversation; see `ToolApprovalPolicyLayers`. */
+  sessionApprovedTools?: readonly string[];
   user?: IUser;
   tenantId?: string;
   /**
@@ -2565,6 +2571,9 @@ export async function createRun({
     if (runFilesActive && runFiles != null && (isSubagent || agent.subagents?.enabled === true)) {
       graphTools = [...(graphTools ?? []), ...createRunFileTools(runFiles, agent.id, signal)];
     }
+    if (!isSubagent && agent.hostGraphTools != null && agent.hostGraphTools.length > 0) {
+      graphTools = [...(graphTools ?? []), ...agent.hostGraphTools];
+    }
     if (graphTools) {
       /**
        * Typed structurally — not as `AgentInputs['graphTools']` — because the
@@ -2699,6 +2708,7 @@ export async function createRun({
   const toolApprovalPolicy = resolveToolApprovalPolicy({
     endpoint: agentsEndpointConfig?.toolApproval,
     attachedCodeEnvironment: attachedCodeEnvironmentAgentIds.size > 0,
+    session: sessionApprovedTools,
   });
   // Gate HITL to callers that actually implement the pause/resume lifecycle. The
   // OpenAI-compatible + Responses controllers also call createRun/processStream but never

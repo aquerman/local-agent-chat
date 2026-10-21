@@ -49,6 +49,9 @@ syncs conflict only here.
   `local-llm` (model alias `local`, from `--alias local` in `../local-llm/scripts/start-server.ps1`).
   Per-endpoint keys elsewhere in the YAML (`fileConfig.endpoints`) match the `name`, or the
   generic `custom` key, never the display label.
+- `bennychat.yaml` (tracked) is the fork's full LibreChat config, one commented section per roadmap
+  feature. Use it with `CONFIG_PATH=bennychat.yaml` in `.env`, or copy it over `librechat.yaml`.
+  New features are switched on there, not in upstream's `librechat.example.yaml`.
 - `gh` default repo is set to `aquerman/local-agent-chat`. Still pass `--repo aquerman/local-agent-chat`
   to `gh pr create`; never open a pull request against `LibreChat-AI/LibreChat` unless asked.
 
@@ -56,7 +59,10 @@ syncs conflict only here.
 
 - MongoDB is a Windows service, so only two processes need starting: llama-server (local-llm) and
   the LibreChat backend (this repo). `scripts\start-all.bat` starts both in one Windows Terminal
-  window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. The
+  window, one tab each, and skips a tab whose port (8080 or 3080) already has a listener. With chat
+  search on it adds a Meilisearch tab (port 7700, see "Chat search"); with retrieval set up,
+  "Embeddings" and "RAG API" tabs (see "Knowledge and RAG"); with voice installed, "Whisper" and
+  "Piper" tabs (ports 8082/8083, see "Voice"). The
   Desktop `Start All`, `Start Chat` and `Start Server` entries are shortcuts (`.lnk`) to the repo
   files, so editing a script here is enough.
 - `scripts\start-chat.bat` starts only LibreChat (`npm run backend`, which serves the built client).
@@ -84,10 +90,15 @@ syncs conflict only here.
   "requires an OCR service" because no `ocr` or `RAG_API_URL` is configured. Injected text is cut
   at `fileTokenLimit` (100k tokens by default) before the model's own `--ctx-size` applies.
 - PDFs uploaded before this override have no stored text and must be re-uploaded.
-- Clicking a PDF or image chip in a sent message opens the original file in the right-hand side panel
-  (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces the other.
-  For files the model read as text, a header button shows the extracted text. Other types and shared
-  links keep the upstream text dialog.
+- Clicking a PDF, image, DOCX or PPTX chip in a sent message opens the original file in the right-hand
+  side panel (`client/src/components/Chat/FilePanel`), the same slot artifacts use; opening one replaces
+  the other. For files the model read as text, a header button shows the extracted text. Other types
+  (xlsx, legacy .doc/.ppt) and shared links keep the upstream text dialog.
+- DOCX/PPTX render in the browser (`FilePanel/office.ts`: `docx-preview`, `pptx-preview`, lazy-loaded,
+  no network, no LibreOffice) into a script-less sandboxed frame, scaled to the panel width. pptxgenjs
+  decks need `dropMissingParts` (dangling content-type overrides make pptx-preview draw nothing); a deck
+  that still draws no slide falls back to its slide text. Tool-made DOCX/PPTX rows
+  (`Parts/OfficeFileRow.tsx`) open this panel too, instead of the Sandpack office card.
 
 ## Thinking mode
 
@@ -115,11 +126,515 @@ syncs conflict only here.
   (`packages/api/src/mcp/utils.ts`). Agents still list their own servers. Without the flag it is
   enabled per chat from the MCP selector in the input badge row. Debug the server alone with
   `npx @modelcontextprotocol/inspector node packages/websearch/dist/index.cjs`.
+- JS rendering (roadmap 2.1): with `WEBSEARCH_RENDER=auto` (default) a static page under ~200 chars
+  of text is re-read in headless Chromium via `playwright-core` (a runtime dependency kept out of the
+  bundle); `always` renders every page, `off` never does. No `render` tool argument, like Claude's
+  single web_fetch. Browser: `WEBSEARCH_BROWSER_PATH`, else Edge (`msedge` channel), Chrome, then
+  Playwright's Chromium; none → static text plus a note. All browser traffic goes through a
+  per-render guarded proxy (`src/proxy.ts`) that dials only checked public addresses and enforces
+  `WEBSEARCH_MAX_BYTES`. Render tests use `PLAYWRIGHT_BROWSERS_PATH`/`WEBSEARCH_BROWSER_PATH` and
+  skip without a Chromium.
 - Tests: `cd packages/websearch && npx jest`; typecheck with `npx tsc --noEmit` there.
 - Verified 2026-10-01 with Qwen2.5-7B-Instruct Q4_K_M (`--jinja`): asked for today's news, the
   model called `search` with a sensible query and answered from the results. It did not chain to
   `fetch` unprompted in that exchange; `fetch` itself is verified over stdio. With a 1 ms timeout
   both tools return their `isError` text instead of throwing.
+
+## Chat search
+
+- Upstream's conversation search (sidebar search box, `/search` results page; Claude Desktop's sidebar
+  chat search) backed by Meilisearch, switched on in `.env` only: `SEARCH=true`,
+  `MEILI_HOST=http://127.0.0.1:7700` (not upstream's `0.0.0.0`, which a Windows client cannot dial),
+  `MEILI_MASTER_KEY=<64 hex chars>`. Generate the key with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`; it never goes in git.
+- Binary: Meilisearch **v1.35.1** (the version upstream's `docker-compose.yml` pins), release asset
+  `meilisearch-windows-amd64.exe`, saved as `bin\meilisearch.exe` (`/bin/` is git-ignored):
+  `mkdir bin`, then `gh release download v1.35.1 --repo meilisearch/meilisearch -p meilisearch-windows-amd64.exe -O bin\meilisearch.exe`.
+- `scripts\start-meili.bat` runs it on `127.0.0.1:7700` with data in `meili_data\` (git-ignored),
+  reading the key from `.env` so it never appears on a command line. `start-all.bat` opens it as a
+  "Meilisearch" tab before LibreChat, only when `.env` has `SEARCH=true` and the exe exists, and
+  skips it when 7700 already listens. Without the exe it prints a note and starts the rest as before.
+- On first start with search on, the backend indexes all existing conversations and messages
+  (`indexSync` in `packages/data-schemas/src/models/plugins/mongoMeili.ts`); new messages are
+  indexed as they are saved. Deleting `meili_data\` and restarting rebuilds the index from MongoDB.
+- Verified 2026-10-20 in a Linux rig with the `getmeili/meilisearch:v1.35.1` image (not the
+  Windows exe): pre-existing chats were indexed at startup, the sidebar search returned them by a
+  word from a reply, and a newly sent message was found too.
+
+## Knowledge and RAG
+
+- Upstream's retrieval path, run natively: LibreChat's RAG API (`danny-avila/rag_api`, Python/FastAPI)
+  with PostgreSQL 16 + pgvector, embeddings from a second llama-server (`--embedding`, local-llm's
+  `scripts\start-embeddings.ps1`, nomic-embed-text-v1.5 Q8_0 on 127.0.0.1:8081, ~0.3 GB VRAM).
+  pgvector is the only store rag_api offers besides Atlas; MongoDB Community's vector search
+  (mongot) has no Windows build. conda-forge is the only prebuilt pgvector for Windows, so one
+  conda env holds Python 3.12, PostgreSQL and pgvector: no admin rights, no compiler, no Docker.
+- User installs: Miniforge (`winget install CondaForge.Miniforge3`) and git. Then
+  `scripts\setup-rag.ps1` clones rag_api into `..\rag_api` (pinned commit `c4e5cbf`), creates
+  `..\rag_api\env`, pip-installs `requirements.lite.txt`, and creates the database in
+  `%LOCALAPPDATA%\bennychat\rag\pgdata` (127.0.0.1:5433, password auth). Re-running skips done steps.
+- `.env` keys: the commented "BennyChat, fully local" block under RAG in `.env.example`
+  (`RAG_API_URL`, `RAG_PORT`, `EMBEDDINGS_PORT`, `RAG_OPENAI_BASEURL`, `DB_PORT`, `POSTGRES_*`,
+  `RAG_CHECK_EMBEDDING_CTX_LENGTH=False` so text, not tiktoken ids, reaches llama-server).
+  `scripts\start-rag.ps1` loads the whole `.env` into rag_api, like upstream's compose `env_file`,
+  so both sides share `JWT_SECRET` and rag_api scopes chunks to the uploading user.
+- `start-all.bat` adds an "Embeddings" tab when `EMBEDDINGS_PORT` is set (skipped with a note if
+  local-llm's exe or script is missing) and a "RAG API" tab when `RAG_API_URL` is set and
+  `..\rag_api\env` exists; each is skipped when its port listens. `start-rag.ps1` starts
+  PostgreSQL in the background and stops it on Ctrl+C.
+- Using it in chat: `fileConfig.endpoints.custom.legacyFileUploadUX: true` (commented out in
+  `bennychat.yaml`) brings back the attach chooser; turn on File Search in the tools menu, then
+  "Upload for File Search". Each turn LibreChat queries `/query` with the user's message (k=4,
+  `packages/api/src/files/rag/context.ts`) and injects those chunks; the model can also call
+  `file_search`. Keep `RAG_USE_FULL_CONTEXT` unset, or whole files come back. In the chooser,
+  "Upload to Provider" sends PDFs as bytes (llama-server 400): use it for images only. Agents with
+  File Search (Agent Builder) embed their files the same way without the chooser.
+- Follow-up idea: route big text uploads to file_search automatically in unified mode (Claude
+  Projects switches to retrieval when knowledge outgrows the context) instead of the chooser.
+- Verified 2026-10-20 in the Linux rig (pgvector:pg16 image, rag_api at the pinned commit in a
+  Python 3.12 venv, llama-server `--embedding` with the F16 nomic file, Qwen3-1.7B): a 22 KB text
+  file uploaded for File Search was embedded (65 chunks for an 84 KB one), the chat answer quoted the
+  one matching chunk, rag_api logged `/embed` then `/query`, and the request was ~1.9k tokens where
+  the whole file is ~6k. Not verified: the Windows scripts (no PowerShell or Windows here), the
+  conda-forge packages, agent knowledge files, and Qwen3.5-9B.
+
+## Voice
+
+- Upstream speech (mic in the composer, speaker under messages) pointed at two CPU-only local servers;
+  config in `bennychat.yaml` ("Roadmap 11, voice"), setup in `docs/voice.md`. Both URLs are listed in
+  `speech.stt/tts.allowedAddresses`: the speech SSRF guard blocks loopback otherwise.
+- STT: whisper.cpp `bin\whisper\whisper-server.exe` (CPU zip) on `VOICE_STT_PORT` (8082) with
+  `--inference-path /v1/audio/transcriptions -l auto --convert`, so the stock `openai` provider works.
+  `--convert` shells out to ffmpeg (on `PATH`) for the browser's webm/ogg/mp4 recordings.
+- TTS: `packages/piper`, a small TS server on `VOICE_TTS_PORT` (8083) that spawns Piper's own
+  `python -m piper.http_server` (venv `bin\piper`, voices `bin\piper\voices`, `PIPER_PORT` 8084) and
+  answers OpenAI `POST /v1/audio/speech`: strips Markdown, picks the voice (`auto` = installed `nl_*`
+  voice for Dutch text, `en_*` for English), encodes mp3 via ffmpeg without ID3/Xing headers, because
+  LibreChat concatenates per-sentence mp3 replies into one `MediaSource` stream. It reads `.env` itself.
+  Tests: `cd packages/piper && npx jest`; typecheck `npx tsc --noEmit` there.
+- `speechTab` defaults mirror Claude: engines `external`, dictation stops on a second mic click and
+  fills the composer (no silence auto-stop, no auto-send), language auto-detected, automatic
+  read-aloud off. Browser-saved settings override them.
+- `scripts\start-all.bat` adds "Whisper" (`scripts\start-stt.bat`) and "Piper" (`scripts\start-tts.bat`)
+  tabs only when `bin\whisper\whisper-server.exe` / the `bin\piper` venv exist, and skips a listening
+  port. Changing a port means editing `.env` and `bennychat.yaml` both.
+- Verified 2026-10-20 in the Linux rig (whisper-server built from source, `ggml-base.bin`, Piper 1.8
+  with an English voice from PyPI): `/api/files/speech/stt` transcribed webm, ogg and m4a uploads,
+  `/tts/manual` returned mp3, and in Chromium with a fake microphone the mic button put the
+  transcript in the composer and "Read aloud" played. Not verified: the Windows binaries and
+  `--convert` on Windows, Dutch voices (HuggingFace is blocked in the rig) and Dutch transcription.
+
+## Skills
+
+- Upstream Skills (`SKILL.md` with `name` + `description` frontmatter, optional bundled files). Starter
+  skills ship in `skill/` (upstream's deployment directory, `DEPLOYMENT_SKILLS_DIR` overrides it, path
+  relative to the backend's cwd): `morning-brief`, `weekly-review`, `meeting-notes`, `house-style`.
+  They load at startup (log: `[deploymentSkills] Loaded 4`), are read-only and active for every user;
+  edit the file and restart the backend to change one. Users add their own in the Skills panel
+  (Customize menu) or by uploading a `SKILL.md`; those live in MongoDB.
+- Switched on per chat from the tools menu ("Skills" badge; new chats remember the last setting) or by
+  typing `$` in the composer to pick one (that primes its body directly, no tool call needed: the
+  reliable path for a small model). F3's model spec can set `skills: true` to make them always on.
+- Progressive disclosure: with the badge on, the prompt gets a system block `## Available Skills`
+  (name + description only, ~40 tokens each) and a `skill` tool; the body enters the context only as
+  the result of a `skill` call or a `$` pick. Catalog capped by `endpoints.agents.skills.maxCatalogSkills`
+  (12 in `bennychat.yaml`). The badge also adds `read_file`, plus `create_file`/`edit_file` while the
+  user may create skills (`interface.skills.create`): about 1.6k tokens of tool schemas in total.
+  Keep descriptions one sentence, "what + Use when ...", so a 9B model can match them.
+- `always-apply: true` in a skill's frontmatter primes its body into every turn; none of the starters
+  use it (prompt budget). Names must be kebab-case and cannot start with `claude-`/`anthropic-`.
+- Verified 2026-10-20 in the cloud rig (logging proxy in front of llama-server): catalog without
+  bodies, the `$` pick priming the body, and a `skill` tool call returning the body (mock model).
+  Qwen3-1.7B never called `skill`, even when told to: it reached for `create_file` both times. Check
+  Qwen3.5-9B; if it does the same, rely on `$` or turn off `interface.skills.create` (which also hides
+  "Create skill" in the UI).
+
+## Artifacts offline
+
+- Artifacts are switched on per chat (Tools menu → Artifacts; the agents capability `artifacts` is on
+  by default), so `bennychat.yaml` has nothing to enable. Mermaid renders in the app (mermaid npm)
+  and needs no network.
+- The Code tab's Monaco is served from `/monaco/vs` (copied from `monaco-editor` at build time,
+  `client/src/utils/monaco.ts`) instead of jsDelivr. The Vite dev server has no copy and keeps the CDN.
+- HTML, SVG, Markdown, code and office previews use Sandpack's `static` template. Upstream it loads
+  its relay from `*.sandpack-static-server.codesandbox.io`, Tailwind from `cdn.tailwindcss.com` and
+  marked from jsDelivr. With `SANDPACK_STATIC_BUNDLER_URL=http://preview.localhost:3080` in `.env`
+  (port = `PORT`), LibreChat serves the relay itself: `packages/api/src/artifacts/bundler.ts`
+  answers hosts `<hex id>-preview.localhost` and is mounted before the security headers, because
+  the app frames it. Those previews then load Tailwind and marked from `/__csb_vendor/`. The
+  `/__csb` prefix makes the preview's service worker pass the request to the server.
+  `copyArtifactRuntime` in `client/vite.config.ts` copies relay, Tailwind and marked into
+  `client/dist/artifacts-preview/` at build time.
+- `*.localhost` resolves to loopback without DNS in Chromium browsers (Edge, Chrome). A page opened
+  from another host (a phone over Tailscale) ignores a `.localhost` bundler and uses codesandbox's
+  bundler. With `CSP_ENABLED`, add `CSP_FRAME_SRC_EXTRA=http://*.localhost:3080` (untested).
+- Self-hosted previews get Tailwind v4 (`@tailwindcss/browser`, the official browser build), not
+  the v3 Play CDN. Most utility classes are the same, but a `tailwind.config = {...}` script is ignored.
+- React artifacts render offline too, on the same switch (page on this machine only). `ArtifactPreview`
+  swaps the `react-ts` template for `static` (`client/src/sandbox/preview.ts`): one `index.html` with
+  the artifact's files as embedded JSON and `/__csb_vendor/react/runtime.js`. That runtime
+  (`client/src/sandbox/runtime.ts`) strips TS/JSX with sucrase, links the files CommonJS-style and
+  renders `App`'s default export into `#root`. Packages come from chunks a second Vite build in
+  `copyArtifactRuntime` makes from npm, one lazy chunk per entry of `SANDBOX_MODULES`
+  (`client/src/sandbox/modules.ts`: React, lucide-react, recharts, three, date-fns, radix, ...), ~3 MB
+  on disk, only imported chunks load. A package not in that list shows an error in the preview
+  instead of loading from npm; add it there (and to client devDependencies) to vendor it. A test keeps
+  the list in sync with the online template's dependencies. lucide-react is the app's 0.528, not the
+  0.394 the prompt names. Keep `SANDPACK_BUNDLER_URL` unset.
+- Verified 2026-10-20/21 in the cloud test rig (Chromium; every non-localhost request aborted and
+  unresolvable): HTML with Tailwind and inline JS, Markdown, Mermaid, the Code tab, and React
+  artifacts (useState + Tailwind + lucide icon + recharts chart; shadcn Card/Tabs/Badge + three +
+  date-fns) rendered with zero external requests. Without the env var React still uses codesandbox.
+
+## Memory
+
+- Upstream memory, switched on in the `memory:` section of `bennychat.yaml` (roadmap 7). After each
+  user turn a memory agent (an ephemeral agent on provider `Benner`, model `local`) reads the last
+  `messageWindowSize` messages and calls `set_memory` / `delete_memory`. Keys are limited to
+  `about_user`, `preferences`, `projects`, `instructions`, 1500 tokens in total. Each key holds one value
+  and `set_memory` overwrites it, so the agent's `instructions` tell it to merge the new fact into what
+  the key already holds.
+- Thinking is off for it: `model_parameters.reasoning_effort: 'none'` becomes
+  `chat_template_kwargs.enable_thinking: false` through the llama_cpp_budget translation (see
+  "Thinking mode").
+- Timing: upstream starts the memory request at the same time as the reply
+  (`runMemory` in `api/server/controllers/agents/client.js`). There is no setting to run it after the
+  reply. At the end of the turn it waits at most 3 s for the "memory updated" chip, and a slower
+  write is still saved. llama-server's default `--parallel` (auto) gives 4 slots sharing one KV cache,
+  so the memory request runs beside the reply, not in front of it. Do not start llama-server with
+  `-np 1`. Each turn costs one extra non-streaming request: about 700 prompt tokens, under 50 output tokens.
+- Every chat's system prompt starts with "Persistent memory…" followed by the saved entries. When a
+  memory changes, the next turn of an open chat has a different prompt prefix and gets processed
+  again from the start.
+- Users see and edit memories under Customize > Memories (filter, add, edit, delete, usage %, "Use
+  memory" toggle). To switch extraction off but keep memories readable and editable, set
+  `memory.agent.enabled: false`. `memory.disabled: true` turns the whole feature off.
+- Verified 2026-10-20 in the cloud rig against Qwen3-1.7B: the request reaches llama-server with
+  `enable_thinking: false`, `max_tokens: 400` and only the two memory tools. A stated preference was saved
+  and shown in the panel. A new chat had it in its system prompt. Manual add and delete through
+  `/api/memories` also worked. The 1.7B has limits: it put a preference under `about_user` in the first
+  person, and once a key already held a value it described the new fact in text instead of calling
+  `set_memory` (4 of 4 tries). Merging into an existing key still needs to be checked on Qwen3.5-9B.
+
+## Routines (scheduled chats)
+
+- Upstream's experimental scheduled chats (`packages/api/src/schedules`, README there) are switched on
+  by `interface.schedules` in `bennychat.yaml`. A schedule sends a fixed prompt to an **agent** on a
+  cadence (hourly/daily/weekdays/weekly or cron, own timezone) and files each run as a new chat with
+  that agent. UI: "Scheduled chats" (minimal layout: Customize menu), with Run now, pause and last run.
+- `.env` needs `SCHEDULES_SINGLE_PROCESS=true` (no Redis). Without it the engine does not arm: the log
+  says "scheduler NOT started" and every schedule write answers 503. `SCHEDULES_DISABLED=true` is
+  upstream's emergency stop for automatic and manual runs.
+- How a run fires: the engine ticks every ~30 s, claims due rows with a Mongo lease, then POSTs the
+  prompt to the agents chat route as the owner over loopback. `POST /api/schedules/:id/run` (the Run
+  now button) fires immediately. An occurrence more than 15 min overdue (backend down, PC asleep) is
+  skipped, not replayed. 5 consecutive failures auto-disable a schedule.
+- Fork choices: upstream defaults (`minIntervalMinutes: 60`, the schema allows 1, used only in rig
+  tests) except `fireConcurrency: 1` for the one GPU; a second due run waits for the slot (Run now
+  answers "skipped (capacity)"). Labels stay "Scheduled chats": renaming to "Routines" means editing
+  upstream's English locale keys, which conflicts on every sync, and there is no config override.
+- Thinking: an agent with no reasoning effort set already runs at Low (`applyLlamaCppThinking`,
+  512-token budget). Set the agent's thinking to Off for routines that do not need it, and keep the
+  prompt short; it runs without chat history.
+- One GPU: routines and live chat share llama-server. Unless local-llm starts it with `--parallel 2`
+  (local-llm's launcher, roadmap F1), a routine run blocks chat until it finishes, and vice versa.
+- The PC must be awake at run time: README "Routines" covers awake hours and wake timers.
+- `SCHEDULES_SINGLE_PROCESS` is a promise that one backend uses this MongoDB. Two backends on the
+  same database each run an engine and mark the other's live runs `interrupted` (seen in the rig).
+- Verified 2026-10-20 in the cloud rig: engine armed; schedule created over the API and shown in the
+  panel; with the interval lowered to 1 min in a scratch config, a `*/2` cron fired 5 runs in a row
+  (mock model), each a new agents chat with the reply and `lastRun: success`; Run now against the
+  CPU Qwen3-1.7B answered and filed a chat. The agent's thinking Off reached llama-server as
+  `enable_thinking: false`. Run now while a run held the only slot answered "skipped (capacity)".
+- Morning brief (roadmap 3): `npm run seed-benny -- [email] --brief [--schedule] [--time HH:MM]
+  [--tz Area/City]` (`config/seed-brief.js`) seeds `agent_morning_brief` (thinking Off, artifacts off)
+  with `list_events_mcp_calendar`, `find-tasks-by-date_mcp_todoist` and `search_mcp_websearch`, and
+  with `--schedule` one daily schedule (default 07:00, the machine's zone; re-running retimes it).
+  Only connectors the owner has connected are attached (calendar: a `mcp_calendar` PluginAuth row;
+  Todoist: an `mcp:todoist` OAuth token), because the schedule's MCP preflight
+  (`packages/api/src/schedules/mcp.ts`) disables a schedule whose agent has an unconnected server
+  (`mcp_configuration_missing` / `mcp_reauth_required`) instead of running without it. Missing
+  sources get no section in the format and are named on its last line ("Not connected: ..."). Re-run after
+  connecting; refreshes rewrite tools and instructions, `--reset` also name/description/model.
+  An expired Todoist grant still pauses the schedule (upstream behaviour, card names the server).
+  Instructions use `{{current_date}}` and follow `skill/morning-brief`'s format. Tests:
+  `npx jest --config config/jest.config.js seed-brief`.
+  Verified 2026-10-21 in the rig (CPU Qwen3-1.7B, fixture ICS, a stdio stand-in for Todoist's
+  `find-tasks-by-date`): seeding, idempotent re-seed, Run now filing a chat with the real events and
+  tasks; with nothing connected the run still succeeds. DuckDuckGo is unreachable from the rig, and
+  the 1.7B then invents headlines (and, with no sources at all, events) despite the instructions:
+  check Qwen3.5-9B.
+
+## Documents (Word, PDF, PowerPoint)
+
+- `packages/documents` is a stdio MCP server (roadmap 5a) with two tools: `create_document(format, title,
+  content | slides)` and `append_section(document_id, content | slides)`. The model writes Markdown
+  (docx/pdf) or a slide outline (pptx: `slides` array of `{title, bullets?, left?, right?, notes?}`, or a
+  Markdown outline in `content`), never OOXML; the server renders with `docx`, `pptxgenjs` and headless
+  Chromium print-to-PDF (`playwright-core`) in one built-in house style (`src/theme.ts`). Long documents
+  are written section by section: each `append_section` re-renders the whole file from the stored source.
+- Drafts and the last rendered file live in `DOCUMENTS_DIR/<document_id>/` (default `%TEMP%\bennychat-documents`).
+  Other env: `DOCUMENTS_PAGE_SIZE` (`A4`/`Letter`), `DOCUMENTS_BROWSER_PATH` / `DOCUMENTS_BROWSER_CHANNEL`
+  (PDF browser; on Windows the installed Edge via channel `msedge`, nothing is downloaded),
+  `DOCUMENTS_MAX_BYTES`, `DOCUMENTS_MAX_SECTIONS`.
+- Each result returns the file as an embedded `resource` with a base64 `blob`. Upstream only turns MCP
+  *images* into attachments and summarizes other blobs, so the fork adds the MCP server option
+  `fileOutputs: true` (`packages/data-provider/src/mcp.ts`, YAML-only): `formatToolContent`
+  (`packages/api/src/mcp/parsers.ts`) moves such blobs into an `mcp_files` artifact and tells the model
+  "File attached to the chat", and `createToolEndCallback` (`api/server/controllers/agents/callbacks.js`)
+  stores them through `processCodeOutput` with a prepared buffer, the same pipeline as code-interpreter
+  outputs. That gives a download chip, per-conversation filename reuse (an append updates the same file)
+  and a row that opens the file side panel (see Attachments). Files over the endpoint upload limit are
+  dropped with a warning.
+- In the chat view DOCX/PPTX rows open the file panel, which needs no bundler or CDN. The upstream
+  Sandpack office card remains only where there is no file panel (shared links) and for xlsx.
+- Benny (`config/seed-benny.js`) lists the server; an existing Benny gets it with
+  `npm run seed-benny -- --reset` or in the Agent Builder. `endpoints.agents.toolApproval.allow` has
+  `*_mcp_documents`: making a file in the chat does not ask for approval, as in Claude Desktop.
+- Wired in `bennychat.yaml` under `mcpServers.documents` (`alwaysOn`, `fileOutputs`). Tests:
+  `cd packages/documents && npx jest` (PDF tests need a browser: Edge on Windows, else set
+  `DOCUMENTS_BROWSER_PATH`); typecheck with `npx tsc --noEmit` there.
+
+## Browser automation (roadmap 2.2)
+
+- `packages/browser` is a stdio MCP server wrapping Microsoft's Playwright MCP (`@playwright/mcp`,
+  pinned exact `0.0.83` as a dependency, so nothing is downloaded at start) in-process: the wrapper
+  is needed because Playwright MCP has no flag to drop core tools or cap output. Wired in
+  `bennychat.yaml` as `mcpServers.browser`, **not** `alwaysOn`: enable it per chat in the MCP picker
+  (plain endpoint chats; Benny has no picker, add the server to an agent in Agent Builder instead).
+- Browser: the installed, signed Microsoft Edge (`msedge` channel, visible window on Windows so the
+  user can watch and sign in to a site once), with a dedicated persistent profile in
+  `data/browser-profile` (git-ignored, `BROWSER_PROFILE_DIR`). The wrapper launches it itself
+  (`src/upstream.ts`, Playwright loaded from `@playwright/mcp`'s nested copy) so it can close it
+  cleanly; Playwright MCP's API leaves a browser it launched running. Closed window → relaunched on
+  the next call.
+- Sites: `BROWSER_ALLOWED_ORIGINS` in `.env` (`;`-separated: origin, `host`, `*.host`,
+  `http://host:*`). Unset = nothing. Enforced twice: Playwright's network filter on every request
+  (so a site's CDN hosts must be listed too) and a wrapper pre-check on `browser_navigate` / new
+  tabs with a clear message; a page that redirects off the list is cleared to `about:blank`.
+- Tools (12, ~2k tokens): navigate, navigate_back, snapshot, find, wait_for, tabs, click, type,
+  fill_form, select_option, press_key, handle_dialog. Hidden: evaluate, run_code_unsafe,
+  file_upload, drop, screenshot, console/network, resize, hover, drag, close; `filename`/`boxes`
+  arguments are stripped. Images off, codegen off, WebMCP off, service workers blocked.
+- Snapshots: `snapshot.mode: none`, so clicks/typing return only a short status and the model calls
+  `browser_snapshot` (supports `depth`, `target` ref) or `browser_find` (text search, small result).
+  Every result is cut at `BROWSER_MAX_CHARS` (12000 ≈ 3k tokens) with a note pointing to those two.
+  Risk: a big page still costs ~3k tokens per snapshot and refs beyond the cut need `find`.
+- Approvals (`endpoints.agents.toolApproval`): LibreChat strips the server-name prefix, so tools
+  are `navigate_mcp_browser` etc. Allowed without asking: snapshot, find, wait_for, navigate,
+  navigate_back, tabs (the site list is the per-site consent, like Claude in Chrome). Every acting
+  tool asks, with "Always allow in this chat". `deny` also lists evaluate/run_code/file_upload.
+- Tests: `cd packages/browser && npx jest` (the proxy suite drives a real Chromium found via
+  `BROWSER_EXECUTABLE_PATH` or `PLAYWRIGHT_BROWSERS_PATH`, skipped without one); `npx tsc --noEmit`.
+- Verified 2026-10-21 in the Linux rig (rig Chromium via `BROWSER_EXECUTABLE_PATH`, headless,
+  `BROWSER_NO_SANDBOX`, a local test site allowed): the backend connects the server (12 tools), a
+  plain chat with Browser picked ran navigate and snapshot without asking, `type` showed the approval
+  card, Approve typed into the page, and after "Always allow in this chat" the next `type` in that
+  chat ran without asking (scripted mock model). Qwen3-1.7B on its own did navigate → find → type
+  with a valid ref and reached the card (~7 min on CPU). Killing the backend left no browser behind.
+  Not verified: Edge on Windows, the visible window, sign-in persistence, Qwen3.5-9B.
+
+## Agents, Benny and approvals (roadmap F3, 13)
+
+- Chats run through the Agents endpoint. `bennychat.yaml` sets `endpoints.agents` (no
+  `execute_code`/`web_search`/`ocr` capabilities: no Code API, search keys or OCR here;
+  `recursionLimit: 20`), top-level `summarization` (self-summarizes on the agent's own model past the
+  32k default budget for model `local`) and a default model spec `benny` → `agent_id: agent_benny`.
+- Agents are DB records, so `npm run seed-benny -- [email] [--reset | --reset=researcher]` (`config/seed-benny.js`) creates
+  `agent_benny` (provider `Benner`, model `local`, websearch MCP + `ask_user_question`, artifacts off
+  to save ~2.5k prompt tokens), owned by the given or oldest user and public-viewable. Idempotent;
+  `--reset` restores the defaults. `alwaysOn` MCP servers do not attach to saved agents: Benny lists
+  `websearch` itself.
+- Thinking pill on agents: the pill follows the agent's provider (`ThinkingModeMenu`), the agents
+  compact schema keeps `reasoning_effort`, and `selectRequestModelParameters`
+  (`packages/api/src/agents/thinking.ts`) forwards it only to agents on a `llama_cpp_budget` endpoint.
+- `ask_user_question` string caps are 1000: llama-server refuses tool grammars with a repetition of
+  2000+ ("failed to parse grammar"), which broke every request carrying the tool.
+- `toolApproval` (`mode: default`): `allow` lists read-only names/patterns (`search*_mcp_*`,
+  `get*_mcp_*`, `list*_mcp_*`...); every other tool asks. MCP tool names are `<tool>_mcp_<server>`.
+  "Always allow in this chat" sends `scope: 'session'`; the resume route stores the paused tool's
+  name on the conversation (`approvedTools`, `select: false`, data-schemas `toolApprovals.ts`) and
+  `createRun` appends it to `allow` (`resolveToolApprovalPolicy` `session` layer). `ask`/`deny`
+  patterns still win over it, so do not put write tools in `ask` if they should be rememberable.
+
+## Deep research (roadmap 16)
+
+- Claude's Research UX on the local stack: plan first, sources cited inline, report as a document.
+  The workflow is one skill, `skill/deep-research/SKILL.md`: plan 3-6 sub-questions (shown in the
+  reply, no approval wait) → per sub-question one `search`, 1-3 `fetch` calls with `maxChars: 6000`,
+  then a ≤150-word note in the chat with numbered sources → report via `create_document` (Summary,
+  default `pdf`; `docx`/`md` on request), one `append_section` per sub-question, then `## Sources`.
+  Notes stay in the chat, so the report step needs no re-fetch.
+- **Researcher agent** (`agent_researcher`, model spec `researcher`, seeded with Benny by
+  `npm run seed-benny`): its instructions are the skill body read at seed time (re-seed with
+  `--reset=researcher` after editing the skill), so the 9B model follows it from the first token
+  with no `skill` call (the rig's small model never called `skill` on its own). Tools: websearch +
+  documents only (4 tools, ~2.7k chars of system prompt). `recursion_limit: 100` (one tool round
+  is ~3 graph steps; a 6×3 run plus report needs ~30 rounds), hence `maxRecursionLimit: 100` in
+  `bennychat.yaml`; `model_parameters.maxContextTokens: 96000` so a long run is not summarized
+  away at the 32k default (needs llama-server at ~120k ctx).
+- **Benny** now has `skills_enabled: true` (scope all) in the seed, so the skill catalog and `$`
+  picks work there; this adds the `skill`/`read_file` and, while `interface.skills.create` is on,
+  `create_file`/`edit_file` tools (~1.6k tokens). With Benny's limit of 20 steps the skill's
+  "Short runs" rule applies: 3 sub-questions, 1 source each, one `create_document` call.
+- **No subagents.** The `subagents` capability (parallel sub-question workers in isolated contexts)
+  is not used: on one GPU the workers share the same slots, so parallelism buys little, the tool's
+  own description is ~350 tokens, and a 9B must write a self-contained brief per worker. A whole
+  run stays ~20-30k tokens with the 6000-char fetch cap, well inside 120k, so isolation is not needed.
+- `packages/documents` gained `format: 'md'` (`text/markdown`, title as `#` heading). The client
+  shows a file updated in place by several tool calls (same `file_id`, e.g. each `append_section`)
+  as one chip, its latest version (`latestFileVersions` in `Parts/Attachment.tsx`).
+- Verified 2026-10-21 in the rig with a scripted stand-in model (test-only, not committed) and the
+  real websearch server wrapped with an injected fetch that maps fake public hosts onto 4 local
+  HTML pages (the committed SSRF guard untouched; a direct loopback fetch was still refused):
+  plan, 3 notes with numbered sources, and a cited PDF attached to the chat in 13 tool rounds;
+  prompts grew from ~1.9k to ~5k tokens. Benny, loading the skill through the `skill` tool, did
+  the short run in 8 tool rounds within its 20-step limit (a "3 rounds left" notice arrives at round
+  7) and attached a `.md` report. The rig's Qwen3-1.7B made the plan and searched, but wrote notes
+  from snippets without fetching and never made the document. Not verified: Qwen3.5-9B, live websites.
+
+## Connectors (Todoist, calendar, email)
+
+- Roadmap 4; full setup in `docs/connectors.md`. Three `mcpServers` entries in `bennychat.yaml`, all
+  `startup: false`: each user connects from the MCP panel, credentials stay per user, encrypted in
+  MongoDB (never `.env`/git). Enable per chat in the MCP selector, or add to an agent.
+- `todoist`: Todoist's official remote server `https://ai.todoist.net/mcp`, `requiresOAuth`; LibreChat
+  does dynamic client registration and the callback is `<DOMAIN_SERVER>/api/mcp/todoist/oauth/callback`.
+  ~45 tools, so add it only where needed. Writes ask via `endpoints.agents.toolApproval` (roadmap 13).
+- `calendar` (`packages/calendar`, ical.js): read-only `list_events` / `search_events` over the secret
+  ICS address (Google or Outlook publish one), set as the per-user var `CALENDAR_ICS_URL` (several:
+  `|`-separated). Feeds cached 5 min. Google/Outlook API servers with writes can be added later.
+- `email` (`packages/email`, imapflow + mailparser): read-only `search_emails` / `read_email` /
+  `list_folders` over IMAP with an app password (Gmail, Fastmail, iCloud; not Outlook.com, which has
+  no password IMAP). Folders opened with EXAMINE, so reading never marks mail read; no send tool.
+- Unfilled per-user vars reach the servers as literal `{{VAR}}`; both servers treat that as "not
+  connected" and answer with setup instructions instead of failing.
+- Tests: `cd packages/calendar && npx jest` (fixture ICS: recurrence, EXDATE, moved occurrence, DST,
+  IANA TZID without VTIMEZONE, floating, all-day); `cd packages/email && npx jest`, with
+  `EMAIL_TEST_IMAP_PORT=3143` against a GreenMail container for the live IMAP suite.
+- Small models invent dates: the calendar tools default to today and their descriptions say to leave
+  `start` out; the result always begins with "Now: <date>".
+
+## Folder access
+
+- Roadmap 8. `mcpServers.filesystem` in `bennychat.yaml` runs the reference
+  `@modelcontextprotocol/server-filesystem` through `packages/folders` (`node
+  packages/folders/src/index.mjs`), which pins it as a dependency (no `npx` download per launch) and
+  passes it the folders from `BENNY_FOLDERS` in `.env`: `;`-separated on Windows, `%VAR%`/`~`
+  expanded, e.g. `%USERPROFILE%\Documents\Assistant;%USERPROFILE%\Documents\Notes`. Unset, it
+  uses `<home>\Documents\Assistant` and creates it. LibreChat's MCP client has no Roots support, so
+  the command line is the whole allow-list; paths outside it are refused by the server.
+- Pinned at `2026.8.31` (deprecated date tag, but it shares LibreChat's `@modelcontextprotocol/sdk`
+  1.30): `1.0.0`/`2.0.0` need SDK >= 1.31 and would bump LibreChat's own SDK in the lock. Move up
+  after an upstream sync brings the SDK forward. This version's `edit_file` saves CRLF files as LF.
+- Approval rides on roadmap 13's `toolApproval` (`mode: default`): reads match its `read*`/`list*`/
+  `search*`/`get*_mcp_*` allow patterns, `directory_tree_mcp_filesystem` is added explicitly, and
+  `write_file`, `edit_file`, `create_directory`, `move_file` match nothing, so they ask (Claude
+  Desktop's Filesystem extension: reads free, writes ask). Do not put them in `ask`, or "Always
+  allow in this chat" stops working for them.
+- Benny (`config/seed-benny.js`) carries 9 of the 14 tools (~5.4k chars of schemas, ~1.4k tokens):
+  no `read_file` alias, `read_media_file`, `read_multiple_files`, `list_directory_with_sizes` or
+  `directory_tree`. Like Claude Desktop, where an enabled extension is in every chat. An existing
+  Benny needs `npm run seed-benny -- --reset`. The server is not `alwaysOn`: non-agent chats pick
+  "Folders" (all 14 tools, ~8k chars) from the MCP selector.
+- Output size: the server has no content grep (`search_files` matches names by glob).
+  `serverInstructions` steers the model to `search_files`/`list_directory` and `read_text_file`
+  `head`/`tail`; for a hard cap set `maxToolResultChars` on the endpoint.
+- Tests: `cd packages/folders && npm test` (node:test, folder parsing).
+- Verified 2026-10-20 in the Linux rig (Qwen3-1.7B, CPU): the server connected at startup with 14
+  tools; in a chat with Folders picked, the model listed and read a file in the allowed temp folder,
+  a read outside it came back "Access denied - path outside allowed directories", and `write_file`
+  showed the Approve/Reject card and wrote the file only after Approve. Re-run on the agents build
+  with a seeded Benny: read and approved write both worked through Benny's folder tools.
+
+## Projects
+
+- Upstream chat projects (name, description, chat grouping; `packages/api/src/projects`,
+  `client/src/components/Projects`) plus Claude Projects-style **instructions** and **knowledge
+  files** (roadmap P1a). Both live on the `ChatProject` record (`instructions`, 8000 chars;
+  `knowledgeFileIds`, max 50, `packages/data-schemas/src/methods/chatProject.ts`) and are edited in
+  the project page's right column (`ProjectKnowledge.tsx`; stacked above the chat list on a phone).
+- Knowledge files are ordinary uploads made with `tool_resource=context`, so their text is
+  extracted once on upload (same parsers as "Attachments"). Removing one detaches it; the file
+  itself stays in the user's files. Routes: `GET/POST /api/projects/:id/knowledge`,
+  `DELETE /api/projects/:id/knowledge/:fileId`.
+- Injection seam: `loadProjectRunContext` (`packages/api/src/projects/context.ts`), called from
+  `api/server/services/Endpoints/agents/initialize.js` beside the other startup reads. Every chat
+  goes through that agents path (custom endpoints run as ephemeral agents), so plain Benner chats
+  and agent runs share it. The project is the saved conversation's `chatProjectId`, or the
+  request's for a new chat. The block (`<project_instructions>`, `<project_knowledge>` with one
+  `<document>` per file) is appended to the primary agent's stable `instructions` inside
+  `initializeAgent` (`projectInstructions`), after the agent's own text and after special-variable
+  resolution, so it stays byte-identical across turns and llama-server reuses the cached prefix.
+  Subagents and title requests do not get it.
+- Knowledge budget: `projects.knowledgeInlineTokens` in `bennychat.yaml` (default 6000, estimated
+  at 4 chars/token, no tokenizer per turn). Under it every file is read in full; over it files are
+  read in order until the budget runs out, the overflowing one cut (`truncated="true"`), the rest
+  named as left out. `planProjectKnowledge` already models a retrieval mode (all files to
+  `file_search` past the budget, `applyProjectSearchFiles`), but the wiring passes
+  `retrievalAvailable: false` until knowledge files are embedded on add.
+- Verified 2026-10-20 in the cloud rig (Qwen3-1.7B, logging proxy): the system message reached
+  llama-server with instructions and file text; the reply followed the instructions and quoted the
+  file; a follow-up turn in the saved chat got the same block; a chat outside the project got none;
+  the configured budget truncated as described. UI: instructions dialog, upload and phone width
+  (removing a file is covered by the component test only).
+
+## Project threads and coordinator (roadmap P1b/P1c)
+
+- Like a Claude project with a coordinator and task threads. `projects.threads` in
+  `bennychat.yaml` (`configSchema`, default off). The first non-thread chat to run a turn in a
+  project becomes its coordinator (`ChatProject.coordinatorConversationId`, set-if-empty; handed
+  on when that chat is deleted). Only the coordinator gets the four tools `start_thread`,
+  `list_threads`, `read_summary`, `post_to_thread` (`packages/api/src/projects/threads/tools.ts`),
+  as in-process `graphTools` via a fork field `hostGraphTools` on the run agent
+  (`packages/api/src/agents/run.ts`), set in `initialize.js` by `resolveCoordinatorTools`. They
+  are on the `toolApproval.allow` list (they only touch chats inside the project).
+- A thread is a `ProjectThread` record (`packages/data-schemas/src/methods/projectThread.ts`) plus
+  an ordinary chat in the project (`chatProjectId` set, so it gets instructions and knowledge;
+  never the tools or the index). Status working / needs_you / done / failed lives on the record and
+  is mirrored to `conversation.threadStatus` for the list badges (`ThreadStatusChip`). Route:
+  `GET /api/projects/:id/threads`; the project page shows a Threads card and a Coordinator button.
+- Runner: `createProjectThreadService` (`packages/api/src/projects/threads/service.ts`), wired in
+  `api/server/services/Projects/threads.js` and started after the schedule engine. Runs go through
+  the durable agent trigger queue (`enqueueAgentTrigger`, `fire` for the first run with the
+  thread's own `newConversationId`, `continue` for `post_to_thread`), source type
+  `project_thread` (`isProjectThreadFireRequest`; `request.js` honors `newConversationId` and skips
+  auto-titles for it). One at a time (`concurrency`, default 1) and only when no other generation
+  is running, so a thread starts after the coordinator's reply and waits behind live chat.
+  `GenerationJobManager.onGenerationSettled` finishes a run; a 15 s sweep catches approval pauses
+  (`requires_action` -> needs_you), missed settles and lost runs (failed after 30 min).
+- Finish: a summary step (`summary.ts`) calls the agent's custom endpoint `/chat/completions`
+  directly with thinking off (`chat_template_kwargs.enable_thinking: false`), ≤`summaryMaxTokens`
+  (300), from the brief plus the thread's final reply; on failure it keeps the reply's start.
+  The coordinator's project block ends with its role line plus `<project_threads>` (finished
+  threads only, newest `indexLimit`, title/status/summary), so it changes only when a thread
+  finishes and the prefix cache holds. Notifications: `onStatusChange` in the wiring is the hook
+  point for the N15 Notifier.
+- Single backend per database (the runner is in-process, like schedules). Verified 2026-10-21 in
+  the rig with a scripted stand-in model and with Qwen3-1.7B on CPU: coordinator called
+  `start_thread`, the thread ran after the reply, finished with a summary, showed done, and the
+  coordinator's next turn had the summary in its system prompt.
+
+## Phone notifications
+
+- `packages/api/src/notifications`: a `Notifier` interface (`send({ title, body, url, priority })`)
+  with one channel, ntfy (`ntfy.ts`, JSON publish to the server root, optional Bearer token). Web Push
+  to the PWA can be a second `Notifier` later; it was not used first because iOS needs HTTPS and an
+  installed PWA, and the Tailscale setup is plain HTTP.
+- Routines: `createRoutineNotifications` (`routines.ts`) is passed to `createSchedulesService` as
+  `onRunOutcome` from `api/server/services/Schedules/index.js`. The service wraps
+  `recordRunOutcome` (`schedules/listener.ts`), which now resolves `true` only for the call that
+  applied a transition, so every settle path (live, reconciler, erasure) notifies exactly once.
+  The listener is not awaited and its errors are only logged: a notification never fails a run.
+- Events: `success` (title = routine name, body = first line of the last reply), `error`
+  ("<name> failed", priority 4), `requires_action` ("<name> needs your approval", priority 4).
+  `interrupted` and skips are silent. Tap URL is `<publicBaseUrl>/c/<conversationId>`.
+- Config: top-level `notifications` in `configSchema` (`packages/data-provider/src/config.ts`), off
+  by default. `bennychat.yaml` turns it on with every value from `.env` (`NTFY_TOPIC`, `NTFY_SERVER`,
+  `NTFY_TOKEN`, `BENNYCHAT_PUBLIC_URL`); an unset variable reads as absent, and no topic = no send.
+  One target per deployment (single-user install). Phone setup: README, "Phone notifications".
+- Verified 2026-10-20 in the Linux rig against a fake ntfy server (not the real app): a Run now of a
+  routine posted the expected JSON. Tests: `cd packages/api && npx jest src/notifications`.
 
 ## Keyboard shortcuts
 

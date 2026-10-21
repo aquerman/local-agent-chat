@@ -25,6 +25,11 @@ export const setMaxSubagents = (value: number | undefined): void => {
  *  so the inputs stop at the same point the server would otherwise truncate. */
 export const MAX_CHAT_PROJECT_NAME_LENGTH = 100;
 export const MAX_CHAT_PROJECT_DESCRIPTION_LENGTH = 1000;
+/** Project instructions go into the system prompt of every chat in the project, so the cap
+ *  keeps them near 2k tokens: enough for a working brief, small enough for a local model. */
+export const MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH = 8000;
+/** Knowledge files one project may hold. */
+export const MAX_CHAT_PROJECT_KNOWLEDGE_FILES = 50;
 
 /** Mirrors the bounded graph-child member limit in `@librechat/agents`. */
 export const MAX_GRAPH_SUBAGENT_MEMBERS = 32;

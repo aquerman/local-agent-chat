@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Tools } from 'librechat-data-provider';
 import type { UIResource } from 'librechat-data-provider';
 import type * as t from './types';
+import { MCP_FILE_OUTPUTS_KEY, toMCPFileOutput, describeMCPFileOutput } from './files';
 
 export const DEFAULT_MCP_IMAGE_DATA_MAX_BYTES: number = 10 * 1024 * 1024;
 
@@ -226,6 +227,7 @@ function parseAsString(result: t.MCPToolCallResponse): string {
 export function formatToolContent(
   result: t.MCPToolCallResponse,
   provider: t.Provider,
+  options: t.FormatToolContentOptions = {},
 ): t.FormattedContentResult {
   if (!RECOGNIZED_PROVIDERS.has(provider)) {
     return [parseAsString(result), undefined];
@@ -238,6 +240,23 @@ export function formatToolContent(
 
   const imageUrls: t.FormattedContent[] = [];
   const uiResources: UIResource[] = [];
+  const fileOutputs: t.MCPFileOutput[] = [];
+  const asFileOutput = (resource: t.ResourceContents): t.MCPFileOutput | undefined => {
+    if (
+      options.fileOutputs !== true ||
+      !('blob' in resource) ||
+      typeof resource.blob !== 'string'
+    ) {
+      return undefined;
+    }
+    if (!resource.blob || resource.mimeType?.toLowerCase().startsWith('image/') === true) {
+      return undefined;
+    }
+    return toMCPFileOutput(
+      { uri: resource.uri, mimeType: resource.mimeType, blob: resource.blob },
+      options.serverName ?? 'mcp',
+    );
+  };
   let currentTextBlock = '';
 
   type ContentHandler = undefined | ((item: t.ToolContentPart) => void);
@@ -270,6 +289,12 @@ export function formatToolContent(
 
     resource: (item) => {
       const isUiResource = item.resource.uri.startsWith('ui://');
+      const fileOutput = isUiResource ? undefined : asFileOutput(item.resource);
+      if (fileOutput !== undefined) {
+        fileOutputs.push(fileOutput);
+        currentTextBlock += (currentTextBlock ? '\n\n' : '') + describeMCPFileOutput(fileOutput);
+        return;
+      }
       const resourceText: string[] = [];
 
       if (isUiResource) {
@@ -351,6 +376,10 @@ UI Resource Markers Available:
       ...artifacts,
       [Tools.ui_resources]: { data: uiResources },
     };
+  }
+
+  if (fileOutputs.length > 0) {
+    artifacts = { ...artifacts, [MCP_FILE_OUTPUTS_KEY]: fileOutputs };
   }
 
   return [currentTextBlock || (artifacts !== undefined ? '' : '(No response)'), artifacts];

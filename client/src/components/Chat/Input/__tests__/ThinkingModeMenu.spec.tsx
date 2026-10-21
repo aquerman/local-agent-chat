@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { QueryKeys, ReasoningEffort } from 'librechat-data-provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { EModelEndpoint, TConversation } from 'librechat-data-provider';
+import type { Agent, EModelEndpoint, TConversation } from 'librechat-data-provider';
+import { AgentsMapContext } from '~/Providers/AgentsMapContext';
 import ThinkingModeMenu from '../ThinkingModeMenu';
 
 const endpointsConfig = {
@@ -17,7 +18,14 @@ jest.mock('~/hooks', () => ({
 
 jest.mock('~/data-provider', () => ({
   useGetEndpointsQuery: () => ({ data: endpointsConfig }),
+  useGetAgentByIdQuery: () => ({ data: undefined }),
 }));
+
+/** Saved agents as the agents map lists them, one per provider. */
+const agentsMap = {
+  agent_benny: { id: 'agent_benny', provider: 'Benner', model: 'local', model_parameters: {} },
+  agent_other: { id: 'agent_other', provider: 'OtherCustom', model: 'x', model_parameters: {} },
+} as unknown as Record<string, Agent>;
 
 type Update = (current: Partial<TConversation> | null) => Partial<TConversation> | null;
 
@@ -53,11 +61,13 @@ describe('ThinkingModeMenu', () => {
     return render(
       <JotaiProvider store={createStore()}>
         <QueryClientProvider client={queryClient}>
-          <ThinkingModeMenu
-            conversation={conversation as TConversation}
-            setConversation={setConversation}
-            disabled={false}
-          />
+          <AgentsMapContext.Provider value={agentsMap}>
+            <ThinkingModeMenu
+              conversation={conversation as TConversation}
+              setConversation={setConversation}
+              disabled={false}
+            />
+          </AgentsMapContext.Provider>
         </QueryClientProvider>
       </JotaiProvider>,
     );
@@ -130,5 +140,24 @@ describe('ThinkingModeMenu', () => {
     expect(
       queryClient.getQueryData<TConversation>([QueryKeys.conversation, 'c3'])?.reasoning_effort,
     ).toBe('none');
+  });
+
+  it('follows a saved agent to its llama_cpp_budget provider and seeds its conversation', () => {
+    const setConversation = jest.fn();
+    const agentConvo = { ...convo('a1', 'agents'), agent_id: 'agent_benny' };
+    renderMenu({ conversation: agentConvo, setConversation });
+    expect(screen.getByTestId('thinking-mode')).toHaveTextContent('com_ui_thinking_mode_low');
+    const update: Update = setConversation.mock.calls[0][0];
+    expect(update(agentConvo)).toMatchObject({ agent_id: 'agent_benny', reasoning_effort: 'low' });
+  });
+
+  it('stays hidden for a saved agent on any other provider', () => {
+    const setConversation = jest.fn();
+    renderMenu({
+      conversation: { ...convo('a2', 'agents'), agent_id: 'agent_other' },
+      setConversation,
+    });
+    expect(screen.queryByTestId('thinking-mode')).not.toBeInTheDocument();
+    expect(setConversation).not.toHaveBeenCalled();
   });
 });

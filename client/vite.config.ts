@@ -2,12 +2,13 @@ import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
 import { constants } from 'zlib';
-import { defineConfig } from 'vite';
+import { build, defineConfig } from 'vite';
 import { createRequire } from 'module';
 import { VitePWA } from 'vite-plugin-pwa';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { compression, defineAlgorithm } from 'vite-plugin-compression2';
 import type { Plugin } from 'vite';
+import { SANDBOX_MODULES, sandboxImportPath } from './src/sandbox/modules';
 
 const require = createRequire(import.meta.url);
 
@@ -90,6 +91,7 @@ export default defineConfig(({ command }) => ({
       },
     },
     copyPublicAssets(),
+    copyArtifactRuntime(),
     VitePWA({
       injectRegister: 'auto', // 'auto' | 'manual' | 'disabled'
       registerType: 'autoUpdate', // 'prompt' | 'autoUpdate'
@@ -113,6 +115,8 @@ export default defineConfig(({ command }) => ({
           '**/*.map',
           'index.html',
           'sw-heal.js',
+          'artifacts-preview/**/*',
+          'monaco/**/*',
           'assets/rum.*.js',
           'assets/locale-*.js',
           'assets/query-devtools*.js',
@@ -348,6 +352,15 @@ export default defineConfig(({ command }) => ({
                   if (normalizedId.includes('heic-to')) {
                     return 'heic-converter';
                   }
+                  /* The file panel's DOCX/PPTX renderers stay with their lazy importer instead of
+                   * the startup vendor chunk, so they load only when such a file is opened. */
+                  if (
+                    /node_modules\/(docx-preview|pptx-preview|echarts|zrender|jszip)\//.test(
+                      normalizedId,
+                    )
+                  ) {
+                    return null;
+                  }
 
                   // Existing chunks
                   if (normalizedId.includes('@radix-ui')) {
@@ -456,6 +469,104 @@ export function sourcemapExclude(opts?: SourcemapExclude): Plugin {
       }
     },
   };
+}
+
+/**
+ * Vendors the artifact panel's runtime files from npm into dist so previews and the code tab
+ * work without the internet (fork: see CLAUDE.md "Artifacts offline"):
+ * - `artifacts-preview/`: static-browser-server's relay and service worker, the files
+ *   Sandpack's `static` template loads from `staticBundlerURL`. Resolved through
+ *   sandpack-client so the relay always matches the client's protocol version.
+ * - `artifacts-preview/__csb_vendor/`: Tailwind's browser build and `marked` (Markdown and code
+ *   previews). The `__csb` prefix makes the preview's service worker pass these requests
+ *   through to the server.
+ * - `artifacts-preview/__csb_vendor/react/`: the React artifact runtime (see `buildSandboxRuntime`).
+ * - `monaco/vs`: the AMD build `@monaco-editor/react` otherwise loads from jsDelivr.
+ */
+export function copyArtifactRuntime(): Plugin {
+  const sandpackRequire = createRequire(require.resolve('@codesandbox/sandpack-client'));
+  const previewDir = path.join(
+    path.dirname(sandpackRequire.resolve('static-browser-server/package.json')),
+    'out',
+    'preview',
+  );
+  const vendorFiles: Record<string, string> = {
+    'tailwind.js': require.resolve('@tailwindcss/browser'),
+    'marked.js': require.resolve('marked/marked.min.js'),
+  };
+  const monacoDir = path.dirname(require.resolve('monaco-editor'));
+  let outDir = path.resolve(import.meta.dirname, 'dist');
+  return {
+    name: 'copy-artifact-runtime',
+    apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    async writeBundle() {
+      const previewOut = path.join(outDir, 'artifacts-preview');
+      await fs.promises.cp(previewDir, previewOut, { recursive: true });
+      const vendorOut = path.join(previewOut, '__csb_vendor');
+      await fs.promises.mkdir(vendorOut, { recursive: true });
+      await Promise.all(
+        Object.entries(vendorFiles).map(([name, file]) =>
+          fs.promises.copyFile(file, path.join(vendorOut, name)),
+        ),
+      );
+      await fs.promises.cp(monacoDir, path.join(outDir, 'monaco', 'vs'), { recursive: true });
+      await buildSandboxRuntime(path.join(vendorOut, 'react'));
+    },
+  };
+}
+
+const SANDBOX_ENTRY_ID = '\0sandbox-runtime-entry';
+
+/**
+ * Builds the runtime that renders React artifacts without Sandpack's online bundler:
+ * `runtime.js` (`src/sandbox/runtime.ts` with sucrase) plus one lazily imported chunk per
+ * vendored package in `SANDBOX_MODULES`, with shared code such as React split into common
+ * chunks so every package sees the same React instance. A separate Vite build, because these
+ * chunks must not join the app's own bundle or its PWA precache.
+ */
+async function buildSandboxRuntime(outDir: string): Promise<void> {
+  const runtimePath = path.resolve(import.meta.dirname, 'src/sandbox/runtime.ts');
+  const loaders = SANDBOX_MODULES.map(
+    (name) =>
+      `  ${JSON.stringify(name)}: () => import(${JSON.stringify(sandboxImportPath(name))}),`,
+  ).join('\n');
+  const entry = `import { start } from ${JSON.stringify(runtimePath)};\nstart({\n${loaders}\n});\n`;
+  await build({
+    configFile: false,
+    root: import.meta.dirname,
+    publicDir: false,
+    logLevel: 'warn',
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+    plugins: [
+      {
+        name: 'sandbox-runtime-entry',
+        resolveId: (id) => (id === SANDBOX_ENTRY_ID ? id : null),
+        load: (id) => (id === SANDBOX_ENTRY_ID ? entry : null),
+      },
+    ],
+    build: {
+      outDir,
+      emptyOutDir: true,
+      copyPublicDir: false,
+      target: 'es2020',
+      sourcemap: false,
+      modulePreload: false,
+      reportCompressedSize: false,
+      chunkSizeWarningLimit: 4096,
+      rolldownOptions: {
+        input: SANDBOX_ENTRY_ID,
+        preserveEntrySignatures: false,
+        output: {
+          format: 'es',
+          entryFileNames: 'runtime.js',
+          chunkFileNames: 'chunks/[name]-[hash].js',
+        },
+      },
+    },
+  });
 }
 
 /**

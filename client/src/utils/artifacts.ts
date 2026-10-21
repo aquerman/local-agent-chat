@@ -336,6 +336,11 @@ export function getProps(type: string): Partial<SandpackProviderProps> {
  * `injectExternalResources` throws "Unable to determine file type". */
 const TAILWIND_CDN = 'https://cdn.tailwindcss.com/3.4.17#tailwind.js';
 
+/** Tailwind's browser build, served by LibreChat next to its self-hosted static bundler. The
+ * path is relative to the preview origin, and its `/__csb` prefix makes the preview's service
+ * worker pass the request through to the server instead of the virtual file system. */
+export const TAILWIND_SELF_HOSTED = '/__csb_vendor/tailwind.js';
+
 export const sharedOptions: SandpackProviderProps['options'] = {
   externalResources: [TAILWIND_CDN],
 };
@@ -345,17 +350,79 @@ export type SandpackStartupConfig = Pick<
   'bundlerURL' | 'staticBundlerURL'
 >;
 
+const isLoopbackHostname = (hostname: string): boolean =>
+  hostname === 'localhost' ||
+  hostname.endsWith('.localhost') ||
+  hostname === '127.0.0.1' ||
+  hostname === '[::1]';
+
+interface StaticBundlerChoice {
+  bundlerURL?: string;
+  selfHosted: boolean;
+}
+
+/**
+ * A static bundler on a `*.localhost` host is the one LibreChat serves itself (see
+ * `createStaticBundlerMiddleware` in packages/api). That host resolves only in a browser on
+ * the same machine, so a page opened from another device falls back to Sandpack's hosted
+ * bundler. Any other URL passes through unchanged.
+ */
+export function resolveStaticBundler(
+  staticBundlerURL: string | undefined,
+  pageHostname: string,
+): StaticBundlerChoice {
+  if (!staticBundlerURL) {
+    return { selfHosted: false };
+  }
+  let hostname: string;
+  try {
+    hostname = new URL(staticBundlerURL).hostname;
+  } catch {
+    return { bundlerURL: staticBundlerURL, selfHosted: false };
+  }
+  if (!hostname.endsWith('.localhost')) {
+    return { bundlerURL: staticBundlerURL, selfHosted: false };
+  }
+  if (!isLoopbackHostname(pageHostname)) {
+    return { selfHosted: false };
+  }
+  return { bundlerURL: staticBundlerURL, selfHosted: true };
+}
+
+/** Whether a `static`-template preview runs on LibreChat's own bundler, so its vendored
+ *  scripts (Tailwind, marked) must come from LibreChat too. */
+export function isSelfHostedPreview(
+  template: SandpackProviderProps['template'],
+  startupConfig?: SandpackStartupConfig,
+  pageHostname: string = window.location.hostname,
+): boolean {
+  return (
+    template === 'static' &&
+    resolveStaticBundler(startupConfig?.staticBundlerURL, pageHostname).selfHosted
+  );
+}
+
 export function buildSandpackOptions(
   template: SandpackProviderProps['template'],
   startupConfig?: SandpackStartupConfig,
+  pageHostname: string = window.location.hostname,
 ): SandpackProviderProps['options'] {
   if (!startupConfig) {
     return sharedOptions;
   }
 
+  if (template !== 'static') {
+    return { ...sharedOptions, bundlerURL: startupConfig.bundlerURL };
+  }
+
+  const { bundlerURL, selfHosted } = resolveStaticBundler(
+    startupConfig.staticBundlerURL,
+    pageHostname,
+  );
   return {
     ...sharedOptions,
-    bundlerURL: template === 'static' ? startupConfig.staticBundlerURL : startupConfig.bundlerURL,
+    ...(selfHosted ? { externalResources: [TAILWIND_SELF_HOSTED] } : {}),
+    bundlerURL,
   };
 }
 

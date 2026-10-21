@@ -1,9 +1,11 @@
 import {
   MAX_CHAT_PROJECT_NAME_LENGTH,
+  MAX_CHAT_PROJECT_KNOWLEDGE_FILES,
   MAX_CHAT_PROJECT_DESCRIPTION_LENGTH,
+  MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH,
 } from 'librechat-data-provider';
 import type { FilterQuery, Model, SortOrder, Types } from 'mongoose';
-import type { IChatProject, IChatProjectDocument, IConversation } from '~/types';
+import type { IChatProject, IChatProjectDocument, IConversation, IMongoFile } from '~/types';
 import { buildRetentionVisibilityFilter } from '~/utils/retention';
 import { isValidObjectIdString } from '~/utils/objectId';
 import { escapeRegExp } from '~/utils/string';
@@ -15,9 +17,31 @@ export type ChatProjectSortDirection = 'asc' | 'desc';
 export type CreateChatProjectInput = {
   name: string;
   description?: string | null;
+  instructions?: string | null;
 };
 
 export type UpdateChatProjectInput = Partial<CreateChatProjectInput>;
+
+/** A knowledge file's metadata. `textLength` counts the characters of its extracted text,
+ *  so callers can size it without loading the text itself. */
+export type ChatProjectKnowledgeFile = {
+  file_id: string;
+  filename: string;
+  type: string;
+  bytes: number;
+  embedded: boolean;
+  textLength: number;
+};
+
+export type ChatProjectKnowledgeText = {
+  file_id: string;
+  text: string;
+};
+
+/** Thrown when knowledge would exceed `MAX_CHAT_PROJECT_KNOWLEDGE_FILES`. */
+export const CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR = 'Project knowledge file limit reached';
+/** Thrown when a knowledge file id does not name a file the user owns. */
+export const CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND = 'Knowledge file not found';
 
 export type ListChatProjectsOptions = {
   cursor?: string | null;
@@ -62,6 +86,35 @@ export interface ChatProjectMethods {
     projectId: string | null,
   ): Promise<AssignConversationToProjectResult | null>;
   refreshChatProjectStats(user: string, projectId: string): Promise<IChatProject | null>;
+  /** The project's knowledge files in the order they were added, or null when the user has
+   *  no such project. Files deleted since they were added are left out. */
+  listChatProjectKnowledge(
+    user: string,
+    projectId: string,
+  ): Promise<ChatProjectKnowledgeFile[] | null>;
+  /** Extracted text of the user's files, in the order of `fileIds`; files without text are left out. */
+  getChatProjectKnowledgeText(user: string, fileIds: string[]): Promise<ChatProjectKnowledgeText[]>;
+  addChatProjectKnowledge(
+    user: string,
+    projectId: string,
+    fileIds: string[],
+  ): Promise<IChatProject | null>;
+  removeChatProjectKnowledge(
+    user: string,
+    projectId: string,
+    fileId: string,
+  ): Promise<IChatProject | null>;
+  /**
+   * Makes `conversationId` the project's coordinator chat when it has none yet. Returns the
+   * coordinator id after the call (this chat's or the existing one), or null without the project.
+   */
+  claimChatProjectCoordinator(
+    user: string,
+    projectId: string,
+    conversationId: string,
+    /** A coordinator chat that no longer exists and may be replaced. */
+    replace?: string,
+  ): Promise<string | null>;
 }
 
 type ProjectCursor = {
@@ -95,11 +148,47 @@ function normalizeLimit(limit?: number): number {
   return Math.min(Math.max(Math.floor(limit), 1), 100);
 }
 
+const sanitizeInstructions = (instructions?: string | null): string =>
+  instructions?.trim().slice(0, MAX_CHAT_PROJECT_INSTRUCTIONS_LENGTH) ?? '';
+
 function sanitizeProjectInput(input: CreateChatProjectInput): CreateChatProjectInput {
   return {
     name: input.name.trim().slice(0, MAX_CHAT_PROJECT_NAME_LENGTH),
     description: input.description?.trim().slice(0, MAX_CHAT_PROJECT_DESCRIPTION_LENGTH) ?? '',
+    instructions: sanitizeInstructions(input.instructions),
   };
+}
+
+const KNOWLEDGE_FILE_PROJECTION = {
+  _id: 0,
+  file_id: 1,
+  filename: 1,
+  type: 1,
+  bytes: 1,
+  embedded: 1,
+  textLength: { $strLenCP: { $ifNull: ['$text', ''] } },
+};
+
+type KnowledgeFileRow = Partial<ChatProjectKnowledgeFile> & { file_id: string };
+
+function toKnowledgeFile(row: KnowledgeFileRow): ChatProjectKnowledgeFile {
+  return {
+    file_id: row.file_id,
+    filename: row.filename ?? row.file_id,
+    type: row.type ?? '',
+    bytes: row.bytes ?? 0,
+    embedded: row.embedded === true,
+    textLength: row.textLength ?? 0,
+  };
+}
+
+/** Orders rows by `fileIds`, dropping ids with no row. */
+function orderByIds<T extends { file_id: string }>(rows: T[], fileIds: string[]): T[] {
+  const byId = new Map(rows.map((row) => [row.file_id, row]));
+  return fileIds.flatMap((fileId) => {
+    const row = byId.get(fileId);
+    return row ? [row] : [];
+  });
 }
 
 function parseCursor(cursor?: string | null): ProjectCursor | null {
@@ -411,7 +500,7 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     }
 
     const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
-    const update: Partial<Pick<IChatProject, 'name' | 'description'>> = {};
+    const update: Partial<Pick<IChatProject, 'name' | 'description' | 'instructions'>> = {};
     if (typeof input.name === 'string') {
       const name = input.name.trim().slice(0, MAX_CHAT_PROJECT_NAME_LENGTH);
       if (!name) {
@@ -422,6 +511,9 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     if (input.description !== undefined) {
       update.description =
         input.description?.trim().slice(0, MAX_CHAT_PROJECT_DESCRIPTION_LENGTH) ?? '';
+    }
+    if (input.instructions !== undefined) {
+      update.instructions = sanitizeInstructions(input.instructions);
     }
 
     return await ChatProject.findOneAndUpdate(
@@ -447,12 +539,14 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
       return { deletedCount: 0, modifiedCount: 0 };
     }
 
+    const ProjectThread = mongoose.models.ProjectThread;
     const [conversationResult, deleteResult] = await Promise.all([
       Conversation.updateMany(
         { user, chatProjectId: projectId },
-        { $unset: { chatProjectId: '' } },
+        { $unset: { chatProjectId: '', threadStatus: '' } },
       ),
       ChatProject.deleteOne(projectFilter),
+      ProjectThread?.deleteMany({ user, projectId }),
     ]);
 
     return {
@@ -518,11 +612,150 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     };
   }
 
+  async function claimChatProjectCoordinator(
+    user: string,
+    projectId: string,
+    conversationId: string,
+    replace?: string,
+  ): Promise<string | null> {
+    if (!isValidObjectIdString(projectId) || !conversationId) {
+      return null;
+    }
+    const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
+    const _id = new mongoose.Types.ObjectId(projectId);
+    const replaceable: Array<string | null> = replace ? [null, '', replace] : [null, ''];
+    const claimed = await ChatProject.findOneAndUpdate(
+      { _id, user, coordinatorConversationId: { $in: replaceable } },
+      { $set: { coordinatorConversationId: conversationId } },
+      { new: true, timestamps: false },
+    )
+      .select('coordinatorConversationId')
+      .lean<IChatProject>();
+    if (claimed) {
+      return claimed.coordinatorConversationId ?? null;
+    }
+    const current = await ChatProject.findOne({ _id, user })
+      .select('coordinatorConversationId')
+      .lean<IChatProject>();
+    return current?.coordinatorConversationId ?? null;
+  }
+
   async function refreshChatProjectStats(
     user: string,
     projectId: string,
   ): Promise<IChatProject | null> {
     return await refreshChatProjectStatsForUser(mongoose, user, projectId);
+  }
+
+  async function findKnowledgeFiles(
+    user: string,
+    fileIds: string[],
+  ): Promise<ChatProjectKnowledgeFile[]> {
+    if (fileIds.length === 0) {
+      return [];
+    }
+    const File = mongoose.models.File as Model<IMongoFile>;
+    const rows = await File.find(
+      { user, file_id: { $in: fileIds } },
+      KNOWLEDGE_FILE_PROJECTION,
+    ).lean<KnowledgeFileRow[]>();
+    return orderByIds(rows.map(toKnowledgeFile), fileIds);
+  }
+
+  async function listChatProjectKnowledge(
+    user: string,
+    projectId: string,
+  ): Promise<ChatProjectKnowledgeFile[] | null> {
+    if (!isValidObjectIdString(projectId)) {
+      return null;
+    }
+    const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
+    const project = await ChatProject.findOne({
+      _id: new mongoose.Types.ObjectId(projectId),
+      user,
+    })
+      .select('knowledgeFileIds')
+      .lean<Pick<IChatProject, 'knowledgeFileIds'>>();
+    if (!project) {
+      return null;
+    }
+    return await findKnowledgeFiles(user, project.knowledgeFileIds ?? []);
+  }
+
+  async function getChatProjectKnowledgeText(
+    user: string,
+    fileIds: string[],
+  ): Promise<ChatProjectKnowledgeText[]> {
+    if (fileIds.length === 0) {
+      return [];
+    }
+    const File = mongoose.models.File as Model<IMongoFile>;
+    const rows = await File.find(
+      { user, file_id: { $in: fileIds }, text: { $type: 'string', $ne: '' } },
+      { _id: 0, file_id: 1, text: 1 },
+    ).lean<ChatProjectKnowledgeText[]>();
+    return orderByIds(rows, fileIds);
+  }
+
+  async function addChatProjectKnowledge(
+    user: string,
+    projectId: string,
+    fileIds: string[],
+  ): Promise<IChatProject | null> {
+    if (!isValidObjectIdString(projectId)) {
+      return null;
+    }
+    const uniqueIds = [...new Set(fileIds.filter((id) => typeof id === 'string' && id))];
+    if (uniqueIds.length > MAX_CHAT_PROJECT_KNOWLEDGE_FILES) {
+      throw new Error(CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR);
+    }
+    if (uniqueIds.length === 0) {
+      return await getChatProject(user, projectId);
+    }
+    const owned = await findKnowledgeFiles(user, uniqueIds);
+    if (owned.length !== uniqueIds.length) {
+      throw new Error(CHAT_PROJECT_KNOWLEDGE_FILE_NOT_FOUND);
+    }
+
+    const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
+    const projectFilter = { _id: new mongoose.Types.ObjectId(projectId), user };
+    /** The size guard is part of the write, so two concurrent adds cannot both pass it: the
+     *  array may hold at most `limit - n` entries before `n` new ones are appended. */
+    const updated = await ChatProject.findOneAndUpdate(
+      {
+        ...projectFilter,
+        [`knowledgeFileIds.${MAX_CHAT_PROJECT_KNOWLEDGE_FILES - uniqueIds.length}`]: {
+          $exists: false,
+        },
+      },
+      { $addToSet: { knowledgeFileIds: { $each: uniqueIds } } },
+      { new: true },
+    ).lean<IChatProject>();
+    if (updated) {
+      return updated;
+    }
+
+    const exists = await ChatProject.exists(projectFilter);
+    if (!exists) {
+      return null;
+    }
+    throw new Error(CHAT_PROJECT_KNOWLEDGE_LIMIT_ERROR);
+  }
+
+  async function removeChatProjectKnowledge(
+    user: string,
+    projectId: string,
+    fileId: string,
+  ): Promise<IChatProject | null> {
+    if (!isValidObjectIdString(projectId)) {
+      return null;
+    }
+    const ChatProject = mongoose.models.ChatProject as Model<IChatProjectDocument>;
+    return await ChatProject.findOneAndUpdate(
+      { _id: new mongoose.Types.ObjectId(projectId), user },
+      { $pull: { knowledgeFileIds: fileId } },
+      { new: true },
+    ).lean<IChatProject>();
   }
 
   return {
@@ -533,5 +766,10 @@ export function createChatProjectMethods(mongoose: typeof import('mongoose')): C
     deleteChatProject,
     assignConversationToProject,
     refreshChatProjectStats,
+    listChatProjectKnowledge,
+    getChatProjectKnowledgeText,
+    addChatProjectKnowledge,
+    removeChatProjectKnowledge,
+    claimChatProjectCoordinator,
   };
 }

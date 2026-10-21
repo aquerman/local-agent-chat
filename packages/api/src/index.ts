@@ -15,6 +15,8 @@ export * from './code';
 export * from './auth';
 /* API Keys */
 export * from './apiKeys';
+/* Notifications */
+export * from './notifications';
 /* MCP */
 export * from './mcp/mcpConfig';
 export * from './mcp/authority';
@@ -38,6 +40,7 @@ export * from './mcp/assistants';
 export * from './mcp/request';
 export * from './mcp/reinitialize';
 export * from './mcp/icons';
+export * from './mcp/files';
 /* Utilities */
 export * from './mcp/utils';
 export * from './mcp/domainValidation';

@@ -1,10 +1,14 @@
 import * as cheerio from 'cheerio';
 import type { Cheerio, CheerioAPI } from 'cheerio';
 import type { Element } from 'domhandler';
+import type { BrowserPool, RenderMode } from '~/browser';
+import type { AddressFilter, Resolver } from '~/guard';
 import type { Limits } from '~/limits';
-import type { Resolver } from '~/guard';
 import { assertPublicHttpUrl, defaultResolver } from '~/guard';
+import { isPrivateAddress } from '~/addresses';
+import { BrowserUnavailableError } from '~/browser';
 import { WebSearchError } from '~/errors';
+import { renderPage } from '~/render';
 
 export type FetchFn = typeof globalThis.fetch;
 
@@ -16,11 +20,19 @@ export interface PageContent {
   hint?: string;
 }
 
+/** How `fetch` uses a headless browser; without it every page is read as static HTML. */
+export interface RenderSetup {
+  mode: RenderMode;
+  browsers: BrowserPool;
+}
+
 export interface FetchOptions {
   fetch?: FetchFn;
   resolve?: Resolver;
+  isBlocked?: AddressFilter;
   limits: Limits;
   maxChars?: number;
+  render?: RenderSetup;
 }
 
 const MAX_REDIRECTS = 5;
@@ -32,6 +44,9 @@ const BLOCKS = 'p, h1, h2, h3, h4, h5, h6, li, tr, pre, blockquote, div, section
 const PARAGRAPHS = 'p, h1, h2, h3, h4, h5, h6, pre, blockquote';
 const CELLS = 'td, th';
 const JS_HINT = 'Page content appears to require JavaScript.';
+const NO_BROWSER_HINT =
+  'No browser is available to render it, so this is the page without JavaScript.';
+const THIN_RENDER_HINT = 'Page has almost no readable text, even with JavaScript.';
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 function formatBytes(bytes: number): string {
@@ -75,9 +90,10 @@ async function download(
   rawUrl: string,
   fetchFn: FetchFn,
   resolve: Resolver,
+  isBlocked: AddressFilter,
   limits: Limits,
 ): Promise<Downloaded> {
-  let url = await assertPublicHttpUrl(rawUrl, resolve);
+  let url = await assertPublicHttpUrl(rawUrl, resolve, isBlocked);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
     const response = await fetchFn(url.href, {
       redirect: 'manual',
@@ -88,7 +104,7 @@ async function download(
     if (!REDIRECT_STATUSES.has(response.status) || location === null) {
       return { url, response };
     }
-    url = await assertPublicHttpUrl(new URL(location, url).href, resolve);
+    url = await assertPublicHttpUrl(new URL(location, url).href, resolve, isBlocked);
   }
   throw failure('too many redirects');
 }
@@ -147,28 +163,120 @@ function wrapError(error: unknown, timeoutMs: number): WebSearchError {
   return failure(reason);
 }
 
-export async function fetchPage(rawUrl: string, options: FetchOptions): Promise<PageContent> {
+async function fetchStatic(
+  rawUrl: string,
+  options: FetchOptions,
+  maxChars: number,
+): Promise<PageContent> {
   const fetchFn = options.fetch ?? globalThis.fetch;
   const resolve = options.resolve ?? defaultResolver;
   const { limits } = options;
+  const isBlocked = options.isBlocked ?? isPrivateAddress;
+  const { url, response } = await download(rawUrl, fetchFn, resolve, isBlocked, limits);
+  if (response.status >= 400) {
+    throw failure(`HTTP ${response.status}`);
+  }
+  assertTextType(response.headers.get('content-type'));
+  const body = await readCapped(response, limits.maxBytes);
+  return toPage(url, body, limits, maxChars, JS_HINT);
+}
+
+function assertTextType(header: string | null | undefined): void {
+  const contentType = header ?? 'text/html';
+  if (!TEXT_TYPES.test(contentType)) {
+    throw new WebSearchError(`Not a text page (${contentType})`);
+  }
+}
+
+function toPage(
+  url: URL,
+  body: string,
+  limits: Limits,
+  maxChars: number,
+  thinHint: string,
+): PageContent {
+  const $ = cheerio.load(body);
+  const title = collapse($('title').first().text());
+  const full = extractText($);
+  const truncated = full.length > maxChars;
+  const text = truncated ? full.slice(0, maxChars) : full;
+  const hint = full.length < limits.minUsefulChars ? thinHint : undefined;
+  return { url: url.href, title, text, truncated, ...(hint !== undefined && { hint }) };
+}
+
+async function fetchRendered(
+  rawUrl: string,
+  options: FetchOptions,
+  browsers: BrowserPool,
+  maxChars: number,
+): Promise<PageContent> {
+  const rendered = await renderPage(rawUrl, {
+    browsers,
+    resolve: options.resolve ?? defaultResolver,
+    isBlocked: options.isBlocked ?? isPrivateAddress,
+    limits: options.limits,
+  });
+  assertTextType(rendered.contentType);
+  return toPage(rendered.url, rendered.html, options.limits, maxChars, THIN_RENDER_HINT);
+}
+
+/** `always`: render every page; without a browser, read it statically and say so. */
+async function renderFirst(
+  rawUrl: string,
+  options: FetchOptions,
+  browsers: BrowserPool,
+  maxChars: number,
+): Promise<PageContent> {
+  try {
+    return await fetchRendered(rawUrl, options, browsers, maxChars);
+  } catch (error) {
+    if (!(error instanceof BrowserUnavailableError)) {
+      throw error;
+    }
+    const page = await fetchStatic(rawUrl, options, maxChars);
+    return { ...page, hint: [page.hint, NO_BROWSER_HINT].filter(Boolean).join(' ') };
+  }
+}
+
+/**
+ * `auto`: a static page with almost no text is rendered once more with JavaScript, the way a
+ * single web-fetch tool should behave without the model choosing a mode. A failed render keeps the
+ * static result and says why, rather than failing a fetch that did return something.
+ */
+async function renderIfThin(
+  page: PageContent,
+  options: FetchOptions,
+  browsers: BrowserPool,
+  maxChars: number,
+): Promise<PageContent> {
+  if (page.hint === undefined) {
+    return page;
+  }
+  try {
+    const rendered = await fetchRendered(page.url, options, browsers, maxChars);
+    return rendered.text.length > page.text.length ? rendered : page;
+  } catch (error) {
+    if (error instanceof BrowserUnavailableError) {
+      return { ...page, hint: `${JS_HINT} ${NO_BROWSER_HINT}` };
+    }
+    const reason = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`websearch: render failed for ${page.url}: ${reason}\n`);
+    return { ...page, hint: `${JS_HINT} Rendering it failed (${reason}).` };
+  }
+}
+
+export async function fetchPage(rawUrl: string, options: FetchOptions): Promise<PageContent> {
+  const { limits, render } = options;
   const maxChars = Math.min(options.maxChars ?? limits.maxChars, limits.maxCharsCap);
   try {
-    const { url, response } = await download(rawUrl, fetchFn, resolve, limits);
-    if (response.status >= 400) {
-      throw failure(`HTTP ${response.status}`);
+    if (render === undefined || render.mode === 'off') {
+      return await fetchStatic(rawUrl, options, maxChars);
     }
-    const contentType = response.headers.get('content-type') ?? 'text/html';
-    if (!TEXT_TYPES.test(contentType)) {
-      throw new WebSearchError(`Not a text page (${contentType})`);
+    if (render.mode === 'always') {
+      return await renderFirst(rawUrl, options, render.browsers, maxChars);
     }
-    const body = await readCapped(response, limits.maxBytes);
-    const $ = cheerio.load(body);
-    const title = collapse($('title').first().text());
-    const full = extractText($);
-    const truncated = full.length > maxChars;
-    const text = truncated ? full.slice(0, maxChars) : full;
-    const hint = full.length < limits.minUsefulChars ? JS_HINT : undefined;
-    return { url: url.href, title, text, truncated, ...(hint !== undefined && { hint }) };
+    const page = await fetchStatic(rawUrl, options, maxChars);
+    return await renderIfThin(page, options, render.browsers, maxChars);
   } catch (error) {
     throw wrapError(error, limits.timeoutMs);
   }

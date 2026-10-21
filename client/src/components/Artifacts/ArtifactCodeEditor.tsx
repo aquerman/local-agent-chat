@@ -7,9 +7,12 @@ import type { IThemeRGB } from '@librechat/client';
 import type { editor } from 'monaco-editor';
 import type { Artifact } from '~/common';
 import { useMutationState, useCodeState } from '~/Providers/EditorContext';
+import { configureMonacoLoader } from '~/utils/monaco';
 import { getResponseStatus } from '~/utils/errors';
 import { useArtifactsContext } from '~/Providers';
 import { useEditArtifact } from '~/data-provider';
+
+configureMonacoLoader();
 
 const LANG_MAP: Record<string, string> = {
   javascript: 'javascript',

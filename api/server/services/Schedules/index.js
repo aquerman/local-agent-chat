@@ -11,7 +11,7 @@ function getService() {
     return service;
   }
   const mongoose = require('mongoose');
-  const { createSchedulesService } = require('@librechat/api');
+  const { createSchedulesService, createRoutineNotifications } = require('@librechat/api');
   const { getAppConfig } = require('~/server/services/Config/app');
   const {
     enqueueAgentTrigger,
@@ -50,6 +50,12 @@ function getService() {
     // Reuse the merged trigger/deletion admission fence. A schedule fire and every
     // generic trigger now fail closed on the same durable principal state.
     isUserDeleting,
+    // Phone notifications for finished/failed/paused routines (`notifications` in the YAML).
+    onRunOutcome: createRoutineNotifications({
+      getConfig: async () => (await getAppConfig({ baseOnly: true }))?.config?.notifications,
+      getSchedule: (scheduleId) => methods.getScheduleById(scheduleId),
+      getMessages: (filter, select, options) => methods.getMessages(filter, select, options),
+    }),
   });
   return service;
 }

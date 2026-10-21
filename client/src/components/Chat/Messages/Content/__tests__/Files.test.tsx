@@ -43,7 +43,7 @@ it('exposes extracted image text without changing ordinary image previews', () =
 it('opens files in the side panel when the chat view provides one', () => {
   const openFile = jest.fn(() => true);
   render(
-    <FilePanelContext.Provider value={{ openFile }}>
+    <FilePanelContext.Provider value={{ openFile, closeFile: jest.fn(), openFileId: null }}>
       <Files
         message={
           {
@@ -60,7 +60,9 @@ it('opens files in the side panel when the chat view provides one', () => {
 
 it('falls back to the text dialog when the panel declines the file', () => {
   render(
-    <FilePanelContext.Provider value={{ openFile: () => false }}>
+    <FilePanelContext.Provider
+      value={{ openFile: () => false, closeFile: jest.fn(), openFileId: null }}
+    >
       <Files
         message={
           {

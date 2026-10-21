@@ -16,7 +16,12 @@ const esModules = [
 export default {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/__tests__/fixtures/'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/__tests__/fixtures/',
+    '/__tests__/helpers/',
+  ],
   transform: {
     '\\.[jt]sx?$': [
       'babel-jest',
