@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRecoilValue, useResetRecoilState, useSetRecoilState } from 'recoil';
 import { EModelEndpoint, FileSources, LocalStorageKeys } from 'librechat-data-provider';
 import type { TFile } from 'librechat-data-provider';
@@ -12,6 +12,11 @@ import type { ExtendedFile } from '~/common';
 import useResetArtifactsOnConversationChange from '~/hooks/Artifacts/useResetArtifactsOnConversationChange';
 import { ParentSubagentsProvider } from '~/components/Chat/Subagents/ParentSubagentsProvider';
 import { FilePanel, FilePanelContext, getFilePanelKind } from '~/components/Chat/FilePanel';
+import {
+  ProjectPanel,
+  projectPanelOpenAtom,
+  projectPanelSheetAtom,
+} from '~/components/Projects/Panel';
 import DragDropWrapper from '~/components/Chat/Input/Files/DragDropWrapper';
 import { activeSubagentPanel } from '~/components/Chat/Subagents/state';
 import { EditorProvider, ArtifactsProvider } from '~/Providers';
@@ -40,6 +45,9 @@ export default function Presentation({ children }: { children: React.ReactNode }
   const conversationEndpoint = useRecoilValue(store.effectiveEndpointByIndex(0));
   const conversationAgentId = useRecoilValue(store.conversationAgentIdByIndex(0));
   const isSubmitting = useRecoilValue(store.isSubmittingFamily(0));
+  const chatProjectId = useRecoilValue(store.conversationByIndex(0))?.chatProjectId ?? null;
+  const [isProjectPanelOpen, setProjectPanelOpen] = useAtom(projectPanelOpenAtom);
+  const [isProjectSheetOpen, setProjectSheetOpen] = useAtom(projectPanelSheetAtom);
   const selectedSubagent = useAtomValue(activeSubagentPanel);
   const setSelectedSubagent = useSetAtom(activeSubagentPanel);
   const resetSelectedSubagent = useCallback(() => setSelectedSubagent(null), [setSelectedSubagent]);
@@ -195,6 +203,9 @@ export default function Presentation({ children }: { children: React.ReactNode }
   }, [conversationId, selectedSubagent]);
 
   const panelElement = artifactsElement ?? filePanelElement ?? subagentElement;
+  /** The project panel steps aside while the shared slot holds an artifact, file or thread. */
+  const showProjectPanel = isProjectPanelOpen && panelElement == null;
+  const closeProjectSheet = useCallback(() => setProjectSheetOpen(false), [setProjectSheetOpen]);
 
   return (
     <DragDropWrapper className="relative flex w-full grow overflow-hidden bg-presentation">
@@ -205,11 +216,41 @@ export default function Presentation({ children }: { children: React.ReactNode }
           isSubmitting={isSubmitting}
         >
           <FilePanelContext.Provider value={filePanelContext}>
-            <SidePanelGroup panel={panelElement}>
-              <main className="flex h-full flex-col overflow-y-auto" role="main">
-                {children}
-              </main>
-            </SidePanelGroup>
+            <div className="flex min-w-0 flex-1">
+              <SidePanelGroup panel={panelElement}>
+                <main className="flex h-full flex-col overflow-y-auto" role="main">
+                  {children}
+                </main>
+              </SidePanelGroup>
+            </div>
+            {showProjectPanel && chatProjectId != null && (
+              <ProjectPanel
+                projectId={chatProjectId}
+                conversationId={conversationId}
+                isSubmitting={isSubmitting}
+                onClose={() => setProjectPanelOpen(false)}
+                className="hidden w-72 shrink-0 border-l border-border-light lg:flex xl:w-80"
+              />
+            )}
+            {chatProjectId != null && isProjectSheetOpen && (
+              <div className="fixed inset-0 z-[100] flex justify-end lg:hidden">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="absolute inset-0 bg-black/40"
+                  onClick={closeProjectSheet}
+                />
+                <ProjectPanel
+                  projectId={chatProjectId}
+                  conversationId={conversationId}
+                  isSubmitting={isSubmitting}
+                  onClose={closeProjectSheet}
+                  closeOnNavigate={true}
+                  className="relative w-full max-w-sm shadow-xl"
+                />
+              </div>
+            )}
           </FilePanelContext.Provider>
         </ParentSubagentsProvider>
       </AppChatSurface>

@@ -1,12 +1,9 @@
-import { useEffect, useRef } from 'react';
 import { MessagesSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { QueryKeys } from 'librechat-data-provider';
 import { Button, Spinner } from '@librechat/client';
-import { useQueryClient } from '@tanstack/react-query';
-import type { TChatProject, TProjectThread } from 'librechat-data-provider';
-import { useProjectThreadsQuery } from '~/data-provider';
+import type { TChatProject } from 'librechat-data-provider';
 import ThreadStatusChip from './ThreadStatusChip';
+import { useProjectThreadList } from './threads';
 import { useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
@@ -15,9 +12,6 @@ type ProjectThreadsProps = {
   className?: string;
 };
 
-const statusSignature = (threads: TProjectThread[]): string =>
-  threads.map((thread) => `${thread.id}:${thread.status}`).join(',');
-
 /**
  * The project's coordinator chat and the task threads it started, with live status. Like the
  * thread list of a Claude project: each thread opens as its own chat.
@@ -25,19 +19,8 @@ const statusSignature = (threads: TProjectThread[]): string =>
 export default function ProjectThreads({ project, className }: ProjectThreadsProps) {
   const localize = useLocalize();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { data, isLoading } = useProjectThreadsQuery(project._id);
-  const threads = data?.threads ?? [];
+  const { threads, isLoading } = useProjectThreadList(project._id);
   const coordinatorId = project.coordinatorConversationId;
-  const signature = statusSignature(threads);
-  const previousSignature = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (previousSignature.current != null && previousSignature.current !== signature) {
-      queryClient.invalidateQueries([QueryKeys.allConversations]);
-    }
-    previousSignature.current = signature;
-  }, [signature, queryClient]);
 
   return (
     <section

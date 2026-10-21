@@ -9,6 +9,7 @@ import {
 } from 'librechat-data-provider';
 import { OpenSidebar, PresetsMenu, NewChat, HeaderMenu } from './Menus';
 import { TemporaryChat, TemporaryChatIndicator } from './TemporaryChat';
+import { ProjectPanelToggle } from '~/components/Projects/Panel';
 import ModelSelector from './Menus/Endpoints/ModelSelector';
 import { BackgroundTasksButton } from './BackgroundTasks';
 import { useHasAccess, useMinimalLayout } from '~/hooks';
@@ -39,6 +40,7 @@ function Header({
   const { data: startupConfig } = useGetStartupConfig();
   const navVisible = useRecoilValue(store.sidebarExpanded);
   const isSubmitting = useRecoilValue(store.isSubmittingFamily(0));
+  const chatProjectId = useRecoilValue(store.conversationByIndex(0))?.chatProjectId;
 
   /** The mobile row only offers a new chat when there is one to leave. Read
    *  from the route rather than the context conversation, which still holds the
@@ -126,6 +128,7 @@ function Header({
             isSubmitting={isSubmitting}
           />
         )}
+        {parentConversationId == null && <ProjectPanelToggle projectId={chatProjectId} />}
         <HeaderMenu
           startupConfig={startupConfig}
           trace={trace}

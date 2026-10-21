@@ -59,6 +59,9 @@ const ConversationsSection = memo(() => {
       sortDirection: sort.direction,
       tags: tags.length === 0 ? undefined : tags,
       search: search.debouncedQuery || undefined,
+      /** Project chats are listed under their project, as in Claude. A search and the
+       *  archive still cover every chat. */
+      projectId: isArchivedView || search.debouncedQuery ? undefined : 'unassigned',
     },
     {
       enabled: isAuthenticated,
